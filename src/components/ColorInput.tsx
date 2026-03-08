@@ -23,6 +23,36 @@ const normalizeHex = (raw: string) => {
   return v;
 };
 
+const hexToCmyk = (hex: string) => {
+  const n = normalizeHex(hex);
+  if (!/^#[0-9a-fA-F]{6}$/.test(n)) return '';
+  const r = parseInt(n.slice(1, 3), 16);
+  const g = parseInt(n.slice(3, 5), 16);
+  const b = parseInt(n.slice(5, 7), 16);
+
+  const rPrime = r / 255;
+  const gPrime = g / 255;
+  const bPrime = b / 255;
+
+  const k = 1 - Math.max(rPrime, gPrime, bPrime);
+  if (k >= 1) {
+    // pure black
+    return '0, 0, 0, 100';
+  }
+
+  const c = (1 - rPrime - k) / (1 - k);
+  const m = (1 - gPrime - k) / (1 - k);
+  const y = (1 - bPrime - k) / (1 - k);
+
+  const toPct = (v: number) => Math.round(v * 100);
+  const cPct = toPct(c);
+  const mPct = toPct(m);
+  const yPct = toPct(y);
+  const kPct = toPct(k);
+
+  return `${cPct}, ${mPct}, ${yPct}, ${kPct}`;
+};
+
 export function ColorInput({ label, prefix, values, onChange }: ColorInputProps) {
   const hexKey = `${prefix}_hex`;
   const nameKey = `${prefix}_name`;
@@ -56,6 +86,8 @@ export function ColorInput({ label, prefix, values, onChange }: ColorInputProps)
     if (/^#[0-9a-fA-F]{6}$/.test(n)) {
       setColorValue(n);
       onChange(hexKey, n);
+      const cmyk = hexToCmyk(n);
+      if (cmyk) onChange(cmykKey, cmyk);
     } else {
       // still propagate the normalized value (could be empty or invalid) so parent keeps consistent
       onChange(hexKey, n);
@@ -67,6 +99,8 @@ export function ColorInput({ label, prefix, values, onChange }: ColorInputProps)
     setColorValue(v);
     setHexInput(v);
     onChange(hexKey, v);
+    const cmyk = hexToCmyk(v);
+    if (cmyk) onChange(cmykKey, cmyk);
   };
 
   return (
