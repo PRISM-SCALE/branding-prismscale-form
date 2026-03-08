@@ -21,25 +21,37 @@ export const FileUpload: React.FC<FileUploadProps> = ({ label, fieldKey, onUploa
     setError(null);
 
     try {
-      // Create FormData
-      const formData = new FormData();
-      formData.append('file', file);
-
-      // Upload to server API
-      const res = await fetch('/api/upload-url', {
+      // Request a presigned upload URL from the server
+      const presignRes = await fetch('/api/upload-url', {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: file.name, contentType: file.type || 'application/octet-stream' }),
       });
 
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || `Server error: ${res.status}`);
+      if (!presignRes.ok) {
+        const errorData = await presignRes.json().catch(() => ({}));
+        throw new Error(errorData.error || `Server error: ${presignRes.status}`);
       }
 
-      const { fileUrl } = await res.json();
+      const { uploadUrl, fileUrl } = await presignRes.json();
+      if (!uploadUrl) throw new Error('No uploadUrl returned from server');
 
-      // Update parent state
-      onUploadComplete(fieldKey, fileUrl);
+      // Upload the file directly to S3 using the presigned URL
+      const uploadRes = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': file.type || 'application/octet-stream',
+        },
+        body: file,
+      });
+
+      if (!uploadRes.ok) {
+        const text = await uploadRes.text().catch(() => '');
+        throw new Error(text || `Upload failed with status ${uploadRes.status}`);
+      }
+
+      // Notify parent of successful upload. Use the fileUrl returned by the server (public S3 URL)
+      onUploadComplete(fieldKey, fileUrl || '');
     } catch (err: any) {
       console.error(err);
       setError(err.message || 'Upload failed');
@@ -68,8 +80,8 @@ export const FileUpload: React.FC<FileUploadProps> = ({ label, fieldKey, onUploa
             <button
               type="button"
               className={`flex items-center gap-2 px-4 py-2 border rounded-md text-sm font-medium transition-colors
-                ${uploading 
-                  ? 'bg-gray-100 text-gray-400 border-gray-200' 
+                ${uploading
+                  ? 'bg-gray-100 text-gray-400 border-gray-200'
                   : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
                 }`}
             >
@@ -81,7 +93,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ label, fieldKey, onUploa
           <div className="flex items-center gap-2 bg-green-50 text-green-700 px-3 py-2 rounded-md border border-green-200 text-sm">
             <Check className="w-4 h-4" />
             <span className="truncate max-w-[200px]">{currentUrl.split('/').pop()}</span>
-            <button 
+            <button
               onClick={handleClear}
               className="ml-2 p-1 hover:bg-green-100 rounded-full"
               title="Remove file"
