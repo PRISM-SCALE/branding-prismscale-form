@@ -1,0 +1,5 @@
+{
+  "name": "Branding Page Generator",
+  "description": "A tool to upload branding assets and generate a client branding page via AWS Lambda.",
+  "requestFramePermissions": []
+}
