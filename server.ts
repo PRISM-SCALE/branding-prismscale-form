@@ -1,3 +1,6 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
@@ -16,11 +19,14 @@ async function startServer() {
   app.use(express.json());
 
   // Initialize S3 Client
+  const accessKeyIdEnv = process.env.AWS_ACCESS_KEY || process.env.AWS_ACCESS_KEY_ID || '';
+  const secretAccessKeyEnv = process.env.AWS_SECRET_KEY || process.env.AWS_SECRET_ACCESS_KEY || '';
+
   const s3Client = new S3Client({
     region: process.env.AWS_REGION || 'ap-southeast-1',
     credentials: {
-      accessKeyId: process.env.AWS_ACCESS_KEY || '',
-      secretAccessKey: process.env.AWS_SECRET_KEY || '',
+      accessKeyId: accessKeyIdEnv,
+      secretAccessKey: secretAccessKeyEnv,
     },
     // Disable automatic checksum generation which adds headers that might be blocked by CORS
     requestChecksumCalculation: 'WHEN_REQUIRED',
@@ -39,8 +45,8 @@ async function startServer() {
         return res.status(400).json({ error: 'Missing filename or contentType' });
       }
 
-      const accessKeyId = process.env.AWS_ACCESS_KEY;
-      const secretAccessKey = process.env.AWS_SECRET_KEY;
+      const accessKeyId = process.env.AWS_ACCESS_KEY || process.env.AWS_ACCESS_KEY_ID;
+      const secretAccessKey = process.env.AWS_SECRET_KEY || process.env.AWS_SECRET_ACCESS_KEY;
 
       if (!accessKeyId || !secretAccessKey) {
         console.error('Missing AWS Credentials');
@@ -58,7 +64,7 @@ async function startServer() {
 
       const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
       console.log('Generated upload URL for:', key);
-      
+
       const region = process.env.AWS_REGION || 'ap-southeast-1';
       const fileUrl = `https://${bucketName}.s3.${region}.amazonaws.com/${key}`;
 
