@@ -2,7 +2,7 @@ import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-const REGION = process.env.AWS_REGION || 'ap-southeast-1';
+const REGION = 'ap-southeast-1';
 const BUCKET_NAME = process.env.S3_BUCKET || 'prismscales3';
 
 const createS3Client = () => {
