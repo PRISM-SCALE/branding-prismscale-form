@@ -73,6 +73,12 @@ export default function App() {
                 onUploadComplete={handleInputChange}
                 currentUrl={formData.brand_logo_url}
               />
+              <FileUpload
+                label="Brand Hero Image URL"
+                fieldKey="brand_hero_image_url"
+                onUploadComplete={handleInputChange}
+                currentUrl={formData.brand_hero_image_url}
+              />
             </div>
           </Section>
 
