@@ -168,9 +168,6 @@ export default function App() {
   const [placeholderSections, setPlaceholderSections] = useState<
     PlaceholderSection[]
   >(() => (loadDraft()?.placeholderSections as PlaceholderSection[]) ?? []);
-  const [typographyExtraFonts, setTypographyExtraFonts] = useState<string[]>(
-    () => (loadDraft()?.typographyExtraFonts as string[]) ?? [''],
-  );
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<{
     status: string;
@@ -231,7 +228,6 @@ export default function App() {
             sectionLabels,
             sectionVisibility,
             placeholderSections,
-            typographyExtraFonts,
             savedAt: new Date().toISOString(),
           }),
         );
@@ -241,7 +237,7 @@ export default function App() {
       }
     }, 1000);
     return () => clearTimeout(timer);
-  }, [formData, sectionOrder, sectionLabels, sectionVisibility, placeholderSections, typographyExtraFonts]);
+  }, [formData, sectionOrder, sectionLabels, sectionVisibility, placeholderSections]);
 
   const clearDraft = () => {
     localStorage.removeItem(DRAFT_KEY);
@@ -250,7 +246,6 @@ export default function App() {
     setSectionLabels(DEFAULT_SECTION_LABELS);
     setSectionVisibility(DEFAULT_SECTION_VISIBILITY);
     setPlaceholderSections([]);
-    setTypographyExtraFonts(['']);
     setValidationErrors({});
     setDraftSavedAt(null);
     setShowDraftBanner(false);
@@ -293,22 +288,8 @@ export default function App() {
 
       setPlaceholderSections((vars.placeholder_sections as PlaceholderSection[]) ?? []);
 
-      // Restore extra fonts
-      const restoredFonts: string[] = [
-        (vars.typography_secondary_font_name as string) ?? '',
-      ];
-      let fi = 1;
-      while (typeof vars[`typography_extra_font_${fi}`] === 'string') {
-        restoredFonts.push(vars[`typography_extra_font_${fi}`] as string);
-        fi++;
-      }
-      setTypographyExtraFonts(restoredFonts);
-
-      const { section_order: _o, section_labels: _l, placeholder_sections: _p, typography_secondary_font_name: _sf, ...rest } = vars;
-      const cleanRest = Object.fromEntries(
-        Object.entries(rest).filter(([k]) => !/^typography_extra_font_\d+$/.test(k)),
-      );
-      setFormData(cleanRest as Record<string, string>);
+      const { section_order: _o, section_labels: _l, placeholder_sections: _p, ...rest } = vars;
+      setFormData(rest as Record<string, string>);
 
       setValidationErrors({});
       setLoadClientStatus('success');
@@ -457,12 +438,6 @@ export default function App() {
       section_labels: sectionLabels,
     };
 
-    if (typographyExtraFonts[0]?.trim()) {
-      payload.typography_secondary_font_name = typographyExtraFonts[0];
-    }
-    typographyExtraFonts.slice(1).forEach((name, i) => {
-      if (name.trim()) payload[`typography_extra_font_${i + 1}`] = name;
-    });
 
     const normalizedPlaceholders = placeholderSections
       .map((section) => ({ ...section }))
@@ -766,8 +741,7 @@ export default function App() {
         );
       case "typography":
         return (
-          <div className="grid grid-cols-1 gap-6">
-            {/* Primary Font */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div id="field-typography_primary_font_name">
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Primary Font Name <span className="text-red-500">*</span>
@@ -793,72 +767,23 @@ export default function App() {
               )}
             </div>
 
-            {/* Secondary Font */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Secondary Font Name
+                <span className="ml-1 text-xs font-normal text-gray-400">(optional)</span>
               </label>
               <input
                 type="text"
-                value={typographyExtraFonts[0] ?? ''}
+                value={formData.typography_secondary_font_name || ""}
                 onChange={(e) =>
-                  setTypographyExtraFonts((prev) => {
-                    const next = [...prev];
-                    next[0] = e.target.value;
-                    return next;
-                  })
+                  handleInputChange("typography_secondary_font_name", e.target.value)
                 }
                 className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 placeholder="e.g. Playfair Display"
               />
             </div>
 
-            {/* Additional Fonts */}
-            {typographyExtraFonts.slice(1).map((fontName, i) => (
-              <div key={i} className="flex items-end gap-3">
-                <div className="flex-1">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Additional Font {i + 1}
-                  </label>
-                  <input
-                    type="text"
-                    value={fontName}
-                    onChange={(e) =>
-                      setTypographyExtraFonts((prev) => {
-                        const next = [...prev];
-                        next[i + 1] = e.target.value;
-                        return next;
-                      })
-                    }
-                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                    placeholder="e.g. Source Code Pro"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setTypographyExtraFonts((prev) => prev.filter((_, idx) => idx !== i + 1))
-                  }
-                  className="mb-0.5 p-2 text-gray-400 hover:text-red-500 transition-colors"
-                  title="Remove font"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-            ))}
-
-            {/* Add Font button */}
-            <button
-              type="button"
-              onClick={() => setTypographyExtraFonts((prev) => [...prev, ''])}
-              className="flex items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-800 transition-colors w-fit"
-            >
-              <Plus className="h-4 w-4" />
-              Add Font
-            </button>
-
-            {/* Font file upload */}
-            <div id="field-typography_download_fonts">
+            <div className="md:col-span-2" id="field-typography_download_fonts">
               <FileUpload
                 label="Download Fonts (Zip) *"
                 fieldKey="typography_download_fonts"
