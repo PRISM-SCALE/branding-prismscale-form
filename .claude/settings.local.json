@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(vercel --version 2>&1)",
+      "PowerShell(npx vercel --version 2>&1)",
+      "Bash(ls \"c:\\\\Users\\\\Admin\\\\Desktop\\\\PRISMSCALE_IT\\\\branding\")",
+      "Read(//c/Users/Admin/Desktop/PRISMSCALE_IT/branding/**)"
+    ]
+  }
+}

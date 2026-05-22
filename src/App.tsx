@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { FileUpload } from "./components/FileUpload";
 import { ColorInput } from "./components/ColorInput";
 import { Section } from "./components/Section";
@@ -77,13 +77,11 @@ const REQUIRED_FIELDS = [
   { key: "brand_logo_url", label: "Brand Logo", section: "brand" },
   { key: "brand_hero_image_url", label: "Brand Hero Image", section: "brand" },
   { key: "about_client_about", label: "About Client", section: "about" },
-  { key: "typography_primary_font_name", label: "Primary Font Name", section: "typography" },
-  { key: "typography_download_fonts", label: "Font Files (Zip)", section: "typography" },
   { key: "logo_download_all_logos", label: "Download All Logos (Zip)", section: "logo" },
   { key: "logo_vertical_download_link", label: "Vertical Logo", section: "logo" },
 ] as const;
 
-const REQUIRED_SECTIONS = new Set(["brand", "about", "typography", "logo"]);
+const REQUIRED_SECTIONS = new Set(["brand", "about", "typography", "logo", "colors"]);
 
 // Matches lambda_function.py _sanitize_brand_name exactly
 function sanitizeBrandName(name: string): string {
@@ -93,6 +91,15 @@ function sanitizeBrandName(name: string): string {
 const S3_BRAND_BASE = "https://prismscales3.s3.amazonaws.com/branding-prismscale";
 
 const DRAFT_KEY = "prismscale-branding-draft";
+
+function deriveIndexedCount(data: Record<string, string> | undefined, keyPrefix: string): number {
+  if (!data) return 1;
+  const re = new RegExp(`^${keyPrefix}_(\\d+)_`);
+  const nums = Object.keys(data)
+    .map(k => { const m = k.match(re); return m ? parseInt(m[1]) : 0; })
+    .filter(n => n > 0);
+  return nums.length > 0 ? Math.max(...nums) : 1;
+}
 
 function loadDraft() {
   try {
@@ -182,11 +189,31 @@ export default function App() {
   );
   const [draggedSection, setDraggedSection] = useState<string | null>(null);
   const [dragOverSection, setDragOverSection] = useState<string | null>(null);
+  const [primaryColorCount, setPrimaryColorCount] = useState<number>(() => {
+    const draft = loadDraft();
+    return (draft?.primaryColorCount as number) ?? deriveIndexedCount(draft?.formData as Record<string, string>, 'colors_primary');
+  });
+  const [secondaryColorCount, setSecondaryColorCount] = useState<number>(() => {
+    const draft = loadDraft();
+    return (draft?.secondaryColorCount as number) ?? deriveIndexedCount(draft?.formData as Record<string, string>, 'colors_secondary');
+  });
+  const [primaryFontCount, setPrimaryFontCount] = useState<number>(() => {
+    const draft = loadDraft();
+    return (draft?.primaryFontCount as number) ?? deriveIndexedCount(draft?.formData as Record<string, string>, 'typography_primary');
+  });
+  const [secondaryFontCount, setSecondaryFontCount] = useState<number>(() => {
+    const draft = loadDraft();
+    return (draft?.secondaryFontCount as number) ?? deriveIndexedCount(draft?.formData as Record<string, string>, 'typography_secondary');
+  });
   const [loadClientName, setLoadClientName] = useState('');
   const [loadClientStatus, setLoadClientStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [loadClientError, setLoadClientError] = useState<string | null>(null);
   const [pageCheckStatus, setPageCheckStatus] = useState<'idle' | 'checking' | 'found' | 'not-found'>('idle');
   const [copiedUrl, setCopiedUrl] = useState<'s3' | 'vars' | null>(null);
+  const [allClients, setAllClients] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
+  const autocompleteRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const trimmed = loadClientName.trim();
@@ -205,6 +232,23 @@ export default function App() {
     }, 600);
     return () => clearTimeout(timer);
   }, [loadClientName]);
+
+  useEffect(() => {
+    fetch('/api/list-clients')
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data?.clients) setAllClients(data.clients); })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (autocompleteRef.current && !autocompleteRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleInputChange = (key: string, value: string) => {
     setFormData((prev) => ({ ...prev, [key]: value }));
@@ -228,6 +272,10 @@ export default function App() {
             sectionLabels,
             sectionVisibility,
             placeholderSections,
+            primaryColorCount,
+            secondaryColorCount,
+            primaryFontCount,
+            secondaryFontCount,
             savedAt: new Date().toISOString(),
           }),
         );
@@ -237,7 +285,7 @@ export default function App() {
       }
     }, 1000);
     return () => clearTimeout(timer);
-  }, [formData, sectionOrder, sectionLabels, sectionVisibility, placeholderSections]);
+  }, [formData, sectionOrder, sectionLabels, sectionVisibility, placeholderSections, primaryColorCount, secondaryColorCount, primaryFontCount, secondaryFontCount]);
 
   const clearDraft = () => {
     localStorage.removeItem(DRAFT_KEY);
@@ -249,6 +297,10 @@ export default function App() {
     setValidationErrors({});
     setDraftSavedAt(null);
     setShowDraftBanner(false);
+    setPrimaryColorCount(1);
+    setSecondaryColorCount(1);
+    setPrimaryFontCount(1);
+    setSecondaryFontCount(1);
   };
 
   const copyToClipboard = (text: string, which: 's3' | 'vars') => {
@@ -289,7 +341,12 @@ export default function App() {
       setPlaceholderSections((vars.placeholder_sections as PlaceholderSection[]) ?? []);
 
       const { section_order: _o, section_labels: _l, placeholder_sections: _p, ...rest } = vars;
-      setFormData(rest as Record<string, string>);
+      const restData = rest as Record<string, string>;
+      setFormData(restData);
+      setPrimaryColorCount(Math.max(1, deriveIndexedCount(restData, 'colors_primary')));
+      setSecondaryColorCount(Math.max(1, deriveIndexedCount(restData, 'colors_secondary')));
+      setPrimaryFontCount(Math.max(1, deriveIndexedCount(restData, 'typography_primary')));
+      setSecondaryFontCount(Math.max(1, deriveIndexedCount(restData, 'typography_secondary')));
 
       setValidationErrors({});
       setLoadClientStatus('success');
@@ -401,18 +458,40 @@ export default function App() {
         errors[key] = `${label} is required`;
       }
     }
+    if (!formData['colors_primary_1_hex']?.trim()) {
+      errors['colors_primary_1_hex'] = 'At least one primary color is required';
+    }
+    if (!formData['colors_secondary_1_hex']?.trim()) {
+      errors['colors_secondary_1_hex'] = 'At least one secondary color is required';
+    }
+    if (!formData['typography_primary_1_name']?.trim()) {
+      errors['typography_primary_1_name'] = 'At least one primary font is required';
+    }
+    if (!formData['typography_secondary_1_name']?.trim()) {
+      errors['typography_secondary_1_name'] = 'At least one secondary font is required';
+    }
     setValidationErrors(errors);
 
     if (Object.keys(errors).length > 0) {
-      const sectionsWithErrors = new Set(
+      const sectionsWithErrors = new Set<string>(
         REQUIRED_FIELDS.filter((f) => errors[f.key]).map((f) => f.section),
       );
+      if (errors['colors_primary_1_hex'] || errors['colors_secondary_1_hex']) {
+        sectionsWithErrors.add('colors');
+      }
+      if (errors['typography_primary_1_name'] || errors['typography_secondary_1_name']) {
+        sectionsWithErrors.add('typography');
+      }
       setSectionVisibility((prev) => {
         const next = { ...prev };
         sectionsWithErrors.forEach((s) => { next[s] = true; });
         return next;
       });
-      const firstErrorKey = REQUIRED_FIELDS.find((f) => errors[f.key])?.key;
+      const firstErrorKey = REQUIRED_FIELDS.find((f) => errors[f.key])?.key
+        ?? (errors['colors_primary_1_hex'] ? 'colors_primary_1_hex'
+          : errors['colors_secondary_1_hex'] ? 'colors_secondary_1_hex'
+          : errors['typography_primary_1_name'] ? 'typography_primary_1_name'
+          : 'typography_secondary_1_name');
       if (firstErrorKey) {
         setTimeout(() => {
           document
@@ -684,7 +763,27 @@ export default function App() {
             </div>
           </>
         );
-      case "colors":
+      case "colors": {
+        const removeColor = (type: 'primary' | 'secondary', idx: number) => {
+          const count = type === 'primary' ? primaryColorCount : secondaryColorCount;
+          const setCount = type === 'primary' ? setPrimaryColorCount : setSecondaryColorCount;
+          const fields = ['hex', 'name', 'cmyk'];
+          setFormData(prev => {
+            const next = { ...prev };
+            for (let i = idx; i < count; i++) {
+              fields.forEach(f => {
+                const fromKey = `colors_${type}_${i + 1}_${f}`;
+                const toKey = `colors_${type}_${i}_${f}`;
+                if (next[fromKey] !== undefined) next[toKey] = next[fromKey];
+                else delete next[toKey];
+              });
+            }
+            fields.forEach(f => delete next[`colors_${type}_${count}_${f}`]);
+            return next;
+          });
+          setCount(c => c - 1);
+        };
+
         return (
           <>
             <FileUpload
@@ -694,112 +793,223 @@ export default function App() {
               currentUrl={formData.colors_download_link}
             />
 
-            <h3 className="text-md font-medium text-gray-900 mt-6 mb-4">
-              Primary Colors
-            </h3>
-            <ColorInput
-              label="Primary Color 1"
-              prefix="colors_primary_1"
-              values={formData}
-              onChange={handleInputChange}
-            />
-            <ColorInput
-              label="Primary Color 2"
-              prefix="colors_primary_2"
-              values={formData}
-              onChange={handleInputChange}
-            />
+            <div className="flex items-center justify-between mt-6 mb-4">
+              <h3 className="text-md font-medium text-gray-900">
+                Primary Colors <span className="text-red-500">*</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setPrimaryColorCount(c => c + 1)}
+                className="flex items-center gap-1 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-100"
+              >
+                <Plus className="h-4 w-4" /> Add Primary Color
+              </button>
+            </div>
+            {Array.from({ length: primaryColorCount }, (_, i) => i + 1).map(i => (
+              <div key={i} id={i === 1 ? 'field-colors_primary_1_hex' : undefined} className="relative">
+                {validationErrors['colors_primary_1_hex'] && i === 1 && (
+                  <p className="mb-1 text-sm text-red-600 flex items-center gap-1">
+                    <AlertCircle className="h-4 w-4" /> {validationErrors['colors_primary_1_hex']}
+                  </p>
+                )}
+                <div className="relative">
+                  <ColorInput
+                    label={`Primary Color ${i}`}
+                    prefix={`colors_primary_${i}`}
+                    values={formData}
+                    onChange={(key, val) => {
+                      handleInputChange(key, val);
+                      if (i === 1 && key === `colors_primary_1_hex`) {
+                        setValidationErrors(prev => { const n = { ...prev }; delete n['colors_primary_1_hex']; return n; });
+                      }
+                    }}
+                  />
+                  {i > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeColor('primary', i)}
+                      className="absolute top-3 right-3 rounded-md p-1 text-gray-400 hover:bg-red-50 hover:text-red-500"
+                      title="Remove"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
 
-            <h3 className="text-md font-medium text-gray-900 mt-6 mb-4">
-              Secondary Colors
-            </h3>
-            <ColorInput
-              label="Secondary Color 1"
-              prefix="colors_secondary_1"
-              values={formData}
-              onChange={handleInputChange}
-            />
-            <ColorInput
-              label="Secondary Color 2"
-              prefix="colors_secondary_2"
-              values={formData}
-              onChange={handleInputChange}
-            />
-            <ColorInput
-              label="Secondary Color 3"
-              prefix="colors_secondary_3"
-              values={formData}
-              onChange={handleInputChange}
-            />
-            <ColorInput
-              label="Secondary Color 4"
-              prefix="colors_secondary_4"
-              values={formData}
-              onChange={handleInputChange}
-            />
+            <div className="flex items-center justify-between mt-6 mb-4">
+              <h3 className="text-md font-medium text-gray-900">
+                Secondary Colors <span className="text-red-500">*</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setSecondaryColorCount(c => c + 1)}
+                className="flex items-center gap-1 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-100"
+              >
+                <Plus className="h-4 w-4" /> Add Secondary Color
+              </button>
+            </div>
+            {Array.from({ length: secondaryColorCount }, (_, i) => i + 1).map(i => (
+              <div key={i} id={i === 1 ? 'field-colors_secondary_1_hex' : undefined} className="relative">
+                {validationErrors['colors_secondary_1_hex'] && i === 1 && (
+                  <p className="mb-1 text-sm text-red-600 flex items-center gap-1">
+                    <AlertCircle className="h-4 w-4" /> {validationErrors['colors_secondary_1_hex']}
+                  </p>
+                )}
+                <div className="relative">
+                  <ColorInput
+                    label={`Secondary Color ${i}`}
+                    prefix={`colors_secondary_${i}`}
+                    values={formData}
+                    onChange={(key, val) => {
+                      handleInputChange(key, val);
+                      if (i === 1 && key === `colors_secondary_1_hex`) {
+                        setValidationErrors(prev => { const n = { ...prev }; delete n['colors_secondary_1_hex']; return n; });
+                      }
+                    }}
+                  />
+                  {i > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeColor('secondary', i)}
+                      className="absolute top-3 right-3 rounded-md p-1 text-gray-400 hover:bg-red-50 hover:text-red-500"
+                      title="Remove"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
           </>
         );
-      case "typography":
-        return (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div id="field-typography_primary_font_name">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Primary Font Name <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={formData.typography_primary_font_name || ""}
-                onChange={(e) =>
-                  handleInputChange("typography_primary_font_name", e.target.value)
-                }
-                className={`w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
-                  validationErrors.typography_primary_font_name
-                    ? "border-red-400 ring-1 ring-red-300"
-                    : "border-gray-300"
-                }`}
-                placeholder="e.g. Inter"
-              />
-              {validationErrors.typography_primary_font_name && (
-                <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
-                  <AlertCircle className="h-3 w-3 shrink-0" />
-                  {validationErrors.typography_primary_font_name}
+      }
+      case "typography": {
+        const removeFont = (type: 'primary' | 'secondary', idx: number) => {
+          const count = type === 'primary' ? primaryFontCount : secondaryFontCount;
+          const setCount = type === 'primary' ? setPrimaryFontCount : setSecondaryFontCount;
+          const fields = ['name', 'file'];
+          setFormData(prev => {
+            const next = { ...prev };
+            for (let i = idx; i < count; i++) {
+              fields.forEach(f => {
+                const fromKey = `typography_${type}_${i + 1}_${f}`;
+                const toKey = `typography_${type}_${i}_${f}`;
+                if (next[fromKey] !== undefined) next[toKey] = next[fromKey];
+                else delete next[toKey];
+              });
+            }
+            fields.forEach(f => delete next[`typography_${type}_${count}_${f}`]);
+            return next;
+          });
+          setCount(c => c - 1);
+        };
+
+        const FontCard = ({ type, i }: { type: 'primary' | 'secondary'; i: number }) => {
+          const nameKey = `typography_${type}_${i}_name`;
+          const fileKey = `typography_${type}_${i}_file`;
+          const isFirst = i === 1;
+          const errorKey = `typography_${type}_1_name`;
+          return (
+            <div
+              id={isFirst ? `field-${errorKey}` : undefined}
+              className="relative rounded-lg border border-gray-200 bg-gray-50 p-4 mb-4"
+            >
+              {isFirst && validationErrors[errorKey] && (
+                <p className="mb-2 text-sm text-red-600 flex items-center gap-1">
+                  <AlertCircle className="h-4 w-4" /> {validationErrors[errorKey]}
                 </p>
               )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">
+                    Font Name {isFirst && <span className="text-red-500">*</span>}
+                  </label>
+                  <input
+                    type="text"
+                    value={formData[nameKey] || ''}
+                    onChange={e => {
+                      handleInputChange(nameKey, e.target.value);
+                      if (isFirst) setValidationErrors(prev => { const n = { ...prev }; delete n[errorKey]; return n; });
+                    }}
+                    placeholder={type === 'primary' ? 'e.g. Inter' : 'e.g. Playfair Display'}
+                    className={`w-full px-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
+                      isFirst && validationErrors[errorKey] ? 'border-red-400 ring-1 ring-red-300' : 'border-gray-300'
+                    }`}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Font File</label>
+                  <FileUpload
+                    label=""
+                    fieldKey={fileKey}
+                    onUploadComplete={handleInputChange}
+                    currentUrl={formData[fileKey]}
+                    accept=".ttf,.otf,.woff,.woff2,.zip"
+                  />
+                </div>
+              </div>
+              {i > 1 && (
+                <button
+                  type="button"
+                  onClick={() => removeFont(type, i)}
+                  className="absolute top-3 right-3 rounded-md p-1 text-gray-400 hover:bg-red-50 hover:text-red-500"
+                  title="Remove"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
             </div>
+          );
+        };
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Secondary Font Name
-                <span className="ml-1 text-xs font-normal text-gray-400">(optional)</span>
-              </label>
-              <input
-                type="text"
-                value={formData.typography_secondary_font_name || ""}
-                onChange={(e) =>
-                  handleInputChange("typography_secondary_font_name", e.target.value)
-                }
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                placeholder="e.g. Playfair Display"
-              />
+        return (
+          <>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-md font-medium text-gray-900">
+                Primary Fonts <span className="text-red-500">*</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setPrimaryFontCount(c => c + 1)}
+                className="flex items-center gap-1 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-100"
+              >
+                <Plus className="h-4 w-4" /> Add Primary Font
+              </button>
             </div>
+            {Array.from({ length: primaryFontCount }, (_, i) => i + 1).map(i => (
+              <FontCard key={i} type="primary" i={i} />
+            ))}
 
-            <div className="md:col-span-2" id="field-typography_download_fonts">
+            <div className="flex items-center justify-between mt-6 mb-4">
+              <h3 className="text-md font-medium text-gray-900">
+                Secondary Fonts <span className="text-red-500">*</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setSecondaryFontCount(c => c + 1)}
+                className="flex items-center gap-1 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-100"
+              >
+                <Plus className="h-4 w-4" /> Add Secondary Font
+              </button>
+            </div>
+            {Array.from({ length: secondaryFontCount }, (_, i) => i + 1).map(i => (
+              <FontCard key={i} type="secondary" i={i} />
+            ))}
+
+            <div className="mt-6">
               <FileUpload
-                label="Download Fonts (Zip) *"
+                label="Download All Fonts (Zip)"
                 fieldKey="typography_download_fonts"
                 onUploadComplete={handleInputChange}
                 currentUrl={formData.typography_download_fonts}
                 accept=".zip"
               />
-              {validationErrors.typography_download_fonts && (
-                <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
-                  <AlertCircle className="h-3 w-3 shrink-0" />
-                  {validationErrors.typography_download_fonts}
-                </p>
-              )}
             </div>
-          </div>
+          </>
         );
+      }
       case "illustrations":
         return (
           <>
@@ -986,23 +1196,79 @@ export default function App() {
             <label htmlFor="load-client-input" className="shrink-0 text-sm font-medium text-gray-700">
               Load Client
             </label>
-            <input
-              id="load-client-input"
-              type="text"
-              value={loadClientName}
-              onChange={(e) => {
-                setLoadClientName(e.target.value);
-                setLoadClientStatus('idle');
-                setLoadClientError(null);
-                if (!e.target.value.trim()) setPageCheckStatus('idle');
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') { e.preventDefault(); handleLoadClient(); }
-              }}
-              placeholder="Enter brand name…"
-              className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-              disabled={loadClientStatus === 'loading'}
-            />
+            <div className="relative flex-1" ref={autocompleteRef}>
+              <input
+                id="load-client-input"
+                type="text"
+                value={loadClientName}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setLoadClientName(val);
+                  setLoadClientStatus('idle');
+                  setLoadClientError(null);
+                  setActiveSuggestionIndex(-1);
+                  setShowSuggestions(true);
+                  if (!val.trim()) setPageCheckStatus('idle');
+                }}
+                onFocus={() => setShowSuggestions(true)}
+                onKeyDown={(e) => {
+                  const filtered = allClients.filter((c) =>
+                    c.toLowerCase().includes(loadClientName.toLowerCase().trim())
+                  );
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    setActiveSuggestionIndex((i) => Math.min(i + 1, filtered.length - 1));
+                  } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    setActiveSuggestionIndex((i) => Math.max(i - 1, -1));
+                  } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (activeSuggestionIndex >= 0 && filtered[activeSuggestionIndex]) {
+                      setLoadClientName(filtered[activeSuggestionIndex]);
+                      setShowSuggestions(false);
+                      setActiveSuggestionIndex(-1);
+                    } else {
+                      setShowSuggestions(false);
+                      handleLoadClient();
+                    }
+                  } else if (e.key === 'Escape') {
+                    setShowSuggestions(false);
+                    setActiveSuggestionIndex(-1);
+                  }
+                }}
+                placeholder="Search brand name…"
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                disabled={loadClientStatus === 'loading'}
+                autoComplete="off"
+              />
+              {showSuggestions && loadClientName.trim() && (() => {
+                const filtered = allClients.filter((c) =>
+                  c.toLowerCase().includes(loadClientName.toLowerCase().trim())
+                );
+                return filtered.length > 0 ? (
+                  <ul className="absolute z-50 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+                    {filtered.map((client, i) => (
+                      <li
+                        key={client}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setLoadClientName(client);
+                          setShowSuggestions(false);
+                          setActiveSuggestionIndex(-1);
+                        }}
+                        className={`cursor-pointer px-3 py-2 text-sm ${
+                          i === activeSuggestionIndex
+                            ? 'bg-indigo-600 text-white'
+                            : 'text-gray-800 hover:bg-gray-100'
+                        }`}
+                      >
+                        {client}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null;
+              })()}
+            </div>
             <button
               type="button"
               onClick={handleLoadClient}
