@@ -77,27 +77,53 @@ const REQUIRED_FIELDS = [
   { key: "brand_logo_url", label: "Brand Logo", section: "brand" },
   { key: "brand_hero_image_url", label: "Brand Hero Image", section: "brand" },
   { key: "about_client_about", label: "About Client", section: "about" },
-  { key: "logo_download_all_logos", label: "Download All Logos (Zip)", section: "logo" },
-  { key: "logo_vertical_download_link", label: "Vertical Logo", section: "logo" },
+  {
+    key: "logo_download_all_logos",
+    label: "Download All Logos (Zip)",
+    section: "logo",
+  },
+  {
+    key: "logo_vertical_download_link",
+    label: "Vertical Logo",
+    section: "logo",
+  },
 ] as const;
 
-const REQUIRED_SECTIONS = new Set(["brand", "about", "typography", "logo", "colors"]);
+const REQUIRED_SECTIONS = new Set([
+  "brand",
+  "about",
+  "typography",
+  "logo",
+  "colors",
+]);
 
 // Matches lambda_function.py _sanitize_brand_name exactly
 function sanitizeBrandName(name: string): string {
-  return name.replace(/[^a-z0-9]/gi, "_").replace(/^_+|_+$/g, "").toLowerCase() || "brand";
+  return (
+    name
+      .replace(/[^a-z0-9]/gi, "_")
+      .replace(/^_+|_+$/g, "")
+      .toLowerCase() || "brand"
+  );
 }
 
-const S3_BRAND_BASE = "https://prismscales3.s3.amazonaws.com/branding-prismscale";
+const S3_BRAND_BASE =
+  "https://prismscales3.s3.amazonaws.com/branding-prismscale";
 
 const DRAFT_KEY = "prismscale-branding-draft";
 
-function deriveIndexedCount(data: Record<string, string> | undefined, keyPrefix: string): number {
+function deriveIndexedCount(
+  data: Record<string, string> | undefined,
+  keyPrefix: string,
+): number {
   if (!data) return 1;
   const re = new RegExp(`^${keyPrefix}_(\\d+)_`);
   const nums = Object.keys(data)
-    .map(k => { const m = k.match(re); return m ? parseInt(m[1]) : 0; })
-    .filter(n => n > 0);
+    .map((k) => {
+      const m = k.match(re);
+      return m ? parseInt(m[1]) : 0;
+    })
+    .filter((n) => n > 0);
   return nums.length > 0 ? Math.max(...nums) : 1;
 }
 
@@ -154,12 +180,12 @@ const placeholderHasContent = (section: PlaceholderSection) =>
   Object.values(section).some((value) => value?.trim().length > 0);
 
 type TypographyFontCardProps = {
-  type: 'primary' | 'secondary';
+  type: "primary" | "secondary";
   i: number;
   formData: Record<string, string>;
   validationErrors: Record<string, string>;
   handleInputChange: (key: string, value: string) => void;
-  removeFont: (type: 'primary' | 'secondary', idx: number) => void;
+  removeFont: (type: "primary" | "secondary", idx: number) => void;
   clearValidationError?: (key: string) => void;
 };
 
@@ -194,19 +220,25 @@ function TypographyFontCard({
           </label>
           <input
             type="text"
-            value={formData[nameKey] || ''}
-            onChange={e => {
+            value={formData[nameKey] || ""}
+            onChange={(e) => {
               handleInputChange(nameKey, e.target.value);
               if (isFirst) clearValidationError?.(errorKey);
             }}
-            placeholder={type === 'primary' ? 'e.g. Inter' : 'e.g. Playfair Display'}
+            placeholder={
+              type === "primary" ? "e.g. Inter" : "e.g. Playfair Display"
+            }
             className={`w-full px-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
-              isFirst && validationErrors[errorKey] ? 'border-red-400 ring-1 ring-red-300' : 'border-gray-300'
+              isFirst && validationErrors[errorKey]
+                ? "border-red-400 ring-1 ring-red-300"
+                : "border-gray-300"
             }`}
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-500 mb-1">Font File</label>
+          <label className="block text-xs font-medium text-gray-500 mb-1">
+            Font File
+          </label>
           <FileUpload
             label=""
             fieldKey={fileKey}
@@ -259,7 +291,9 @@ export default function App() {
     vars_url?: string;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [validationErrors, setValidationErrors] = useState<
+    Record<string, string>
+  >({});
   const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(null);
   const [showDraftBanner, setShowDraftBanner] = useState(
     () => !!localStorage.getItem(DRAFT_KEY),
@@ -268,25 +302,53 @@ export default function App() {
   const [dragOverSection, setDragOverSection] = useState<string | null>(null);
   const [primaryColorCount, setPrimaryColorCount] = useState<number>(() => {
     const draft = loadDraft();
-    return (draft?.primaryColorCount as number) ?? deriveIndexedCount(draft?.formData as Record<string, string>, 'colors_primary');
+    return (
+      (draft?.primaryColorCount as number) ??
+      deriveIndexedCount(
+        draft?.formData as Record<string, string>,
+        "colors_primary",
+      )
+    );
   });
   const [secondaryColorCount, setSecondaryColorCount] = useState<number>(() => {
     const draft = loadDraft();
-    return (draft?.secondaryColorCount as number) ?? deriveIndexedCount(draft?.formData as Record<string, string>, 'colors_secondary');
+    return (
+      (draft?.secondaryColorCount as number) ??
+      deriveIndexedCount(
+        draft?.formData as Record<string, string>,
+        "colors_secondary",
+      )
+    );
   });
   const [primaryFontCount, setPrimaryFontCount] = useState<number>(() => {
     const draft = loadDraft();
-    return (draft?.primaryFontCount as number) ?? deriveIndexedCount(draft?.formData as Record<string, string>, 'typography_primary');
+    return (
+      (draft?.primaryFontCount as number) ??
+      deriveIndexedCount(
+        draft?.formData as Record<string, string>,
+        "typography_primary",
+      )
+    );
   });
   const [secondaryFontCount, setSecondaryFontCount] = useState<number>(() => {
     const draft = loadDraft();
-    return (draft?.secondaryFontCount as number) ?? deriveIndexedCount(draft?.formData as Record<string, string>, 'typography_secondary');
+    return (
+      (draft?.secondaryFontCount as number) ??
+      deriveIndexedCount(
+        draft?.formData as Record<string, string>,
+        "typography_secondary",
+      )
+    );
   });
-  const [loadClientName, setLoadClientName] = useState('');
-  const [loadClientStatus, setLoadClientStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [loadClientName, setLoadClientName] = useState("");
+  const [loadClientStatus, setLoadClientStatus] = useState<
+    "idle" | "loading" | "success" | "error"
+  >("idle");
   const [loadClientError, setLoadClientError] = useState<string | null>(null);
-  const [pageCheckStatus, setPageCheckStatus] = useState<'idle' | 'checking' | 'found' | 'not-found'>('idle');
-  const [copiedUrl, setCopiedUrl] = useState<'s3' | 'vars' | null>(null);
+  const [pageCheckStatus, setPageCheckStatus] = useState<
+    "idle" | "checking" | "found" | "not-found"
+  >("idle");
+  const [copiedUrl, setCopiedUrl] = useState<"s3" | "vars" | null>(null);
   const [allClients, setAllClients] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
@@ -295,36 +357,43 @@ export default function App() {
   useEffect(() => {
     const trimmed = loadClientName.trim();
     if (!trimmed) {
-      setPageCheckStatus('idle');
+      setPageCheckStatus("idle");
       return;
     }
-    setPageCheckStatus('checking');
+    setPageCheckStatus("checking");
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/load-client?brand=${encodeURIComponent(trimmed)}`);
-        setPageCheckStatus(res.ok ? 'found' : 'not-found');
+        const res = await fetch(
+          `/api/load-client?brand=${encodeURIComponent(trimmed)}`,
+        );
+        setPageCheckStatus(res.ok ? "found" : "not-found");
       } catch {
-        setPageCheckStatus('not-found');
+        setPageCheckStatus("not-found");
       }
     }, 600);
     return () => clearTimeout(timer);
   }, [loadClientName]);
 
   useEffect(() => {
-    fetch('/api/list-clients')
-      .then((r) => r.ok ? r.json() : null)
-      .then((data) => { if (data?.clients) setAllClients(data.clients); })
+    fetch("/api/list-clients")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.clients) setAllClients(data.clients);
+      })
       .catch(() => {});
   }, []);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (autocompleteRef.current && !autocompleteRef.current.contains(e.target as Node)) {
+      if (
+        autocompleteRef.current &&
+        !autocompleteRef.current.contains(e.target as Node)
+      ) {
         setShowSuggestions(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   const handleInputChange = (key: string, value: string) => {
@@ -362,7 +431,17 @@ export default function App() {
       }
     }, 1000);
     return () => clearTimeout(timer);
-  }, [formData, sectionOrder, sectionLabels, sectionVisibility, placeholderSections, primaryColorCount, secondaryColorCount, primaryFontCount, secondaryFontCount]);
+  }, [
+    formData,
+    sectionOrder,
+    sectionLabels,
+    sectionVisibility,
+    placeholderSections,
+    primaryColorCount,
+    secondaryColorCount,
+    primaryFontCount,
+    secondaryFontCount,
+  ]);
 
   const clearDraft = () => {
     localStorage.removeItem(DRAFT_KEY);
@@ -380,7 +459,7 @@ export default function App() {
     setSecondaryFontCount(1);
   };
 
-  const copyToClipboard = (text: string, which: 's3' | 'vars') => {
+  const copyToClipboard = (text: string, which: "s3" | "vars") => {
     navigator.clipboard.writeText(text).then(() => {
       setCopiedUrl(which);
       setTimeout(() => setCopiedUrl(null), 2000);
@@ -390,13 +469,15 @@ export default function App() {
   const handleLoadClient = async () => {
     const trimmed = loadClientName.trim();
     if (!trimmed) return;
-    setLoadClientStatus('loading');
+    setLoadClientStatus("loading");
     setLoadClientError(null);
     try {
-      const res = await fetch(`/api/load-client?brand=${encodeURIComponent(trimmed)}`);
+      const res = await fetch(
+        `/api/load-client?brand=${encodeURIComponent(trimmed)}`,
+      );
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Failed to load client');
+        throw new Error(err.error || "Failed to load client");
       }
       const vars: Record<string, unknown> = await res.json();
 
@@ -405,32 +486,50 @@ export default function App() {
         setSectionOrder(incomingOrder);
         const visibleSet = new Set(incomingOrder);
         setSectionVisibility(
-          DEFAULT_SECTION_ORDER.reduce<Record<string, boolean>>(
-            (acc, id) => { acc[id] = visibleSet.has(id); return acc; },
-            {},
-          ),
+          DEFAULT_SECTION_ORDER.reduce<Record<string, boolean>>((acc, id) => {
+            acc[id] = visibleSet.has(id);
+            return acc;
+          }, {}),
         );
       }
 
-      const incomingLabels = vars.section_labels as Record<string, string> | undefined;
-      if (incomingLabels) setSectionLabels({ ...DEFAULT_SECTION_LABELS, ...incomingLabels });
+      const incomingLabels = vars.section_labels as
+        | Record<string, string>
+        | undefined;
+      if (incomingLabels)
+        setSectionLabels({ ...DEFAULT_SECTION_LABELS, ...incomingLabels });
 
-      setPlaceholderSections((vars.placeholder_sections as PlaceholderSection[]) ?? []);
+      setPlaceholderSections(
+        (vars.placeholder_sections as PlaceholderSection[]) ?? [],
+      );
 
-      const { section_order: _o, section_labels: _l, placeholder_sections: _p, ...rest } = vars;
+      const {
+        section_order: _o,
+        section_labels: _l,
+        placeholder_sections: _p,
+        ...rest
+      } = vars;
       const restData = rest as Record<string, string>;
       setFormData(restData);
-      setPrimaryColorCount(Math.max(1, deriveIndexedCount(restData, 'colors_primary')));
-      setSecondaryColorCount(Math.max(1, deriveIndexedCount(restData, 'colors_secondary')));
-      setPrimaryFontCount(Math.max(1, deriveIndexedCount(restData, 'typography_primary')));
-      setSecondaryFontCount(Math.max(1, deriveIndexedCount(restData, 'typography_secondary')));
+      setPrimaryColorCount(
+        Math.max(1, deriveIndexedCount(restData, "colors_primary")),
+      );
+      setSecondaryColorCount(
+        Math.max(1, deriveIndexedCount(restData, "colors_secondary")),
+      );
+      setPrimaryFontCount(
+        Math.max(1, deriveIndexedCount(restData, "typography_primary")),
+      );
+      setSecondaryFontCount(
+        Math.max(1, deriveIndexedCount(restData, "typography_secondary")),
+      );
 
       setValidationErrors({});
-      setLoadClientStatus('success');
-      setTimeout(() => setLoadClientStatus('idle'), 2000);
+      setLoadClientStatus("success");
+      setTimeout(() => setLoadClientStatus("idle"), 2000);
     } catch (err) {
-      setLoadClientError(err instanceof Error ? err.message : 'Unknown error');
-      setLoadClientStatus('error');
+      setLoadClientError(err instanceof Error ? err.message : "Unknown error");
+      setLoadClientStatus("error");
     }
   };
 
@@ -535,17 +634,20 @@ export default function App() {
         errors[key] = `${label} is required`;
       }
     }
-    if (!formData['colors_primary_1_hex']?.trim()) {
-      errors['colors_primary_1_hex'] = 'At least one primary color is required';
+    if (!formData["colors_primary_1_hex"]?.trim()) {
+      errors["colors_primary_1_hex"] = "At least one primary color is required";
     }
-    if (!formData['colors_secondary_1_hex']?.trim()) {
-      errors['colors_secondary_1_hex'] = 'At least one secondary color is required';
+    if (!formData["colors_secondary_1_hex"]?.trim()) {
+      errors["colors_secondary_1_hex"] =
+        "At least one secondary color is required";
     }
-    if (!formData['typography_primary_1_name']?.trim()) {
-      errors['typography_primary_1_name'] = 'At least one primary font is required';
+    if (!formData["typography_primary_1_name"]?.trim()) {
+      errors["typography_primary_1_name"] =
+        "At least one primary font is required";
     }
-    if (!formData['typography_secondary_1_name']?.trim()) {
-      errors['typography_secondary_1_name'] = 'At least one secondary font is required';
+    if (!formData["typography_secondary_1_name"]?.trim()) {
+      errors["typography_secondary_1_name"] =
+        "At least one secondary font is required";
     }
     setValidationErrors(errors);
 
@@ -553,22 +655,31 @@ export default function App() {
       const sectionsWithErrors = new Set<string>(
         REQUIRED_FIELDS.filter((f) => errors[f.key]).map((f) => f.section),
       );
-      if (errors['colors_primary_1_hex'] || errors['colors_secondary_1_hex']) {
-        sectionsWithErrors.add('colors');
+      if (errors["colors_primary_1_hex"] || errors["colors_secondary_1_hex"]) {
+        sectionsWithErrors.add("colors");
       }
-      if (errors['typography_primary_1_name'] || errors['typography_secondary_1_name']) {
-        sectionsWithErrors.add('typography');
+      if (
+        errors["typography_primary_1_name"] ||
+        errors["typography_secondary_1_name"]
+      ) {
+        sectionsWithErrors.add("typography");
       }
       setSectionVisibility((prev) => {
         const next = { ...prev };
-        sectionsWithErrors.forEach((s) => { next[s] = true; });
+        sectionsWithErrors.forEach((s) => {
+          next[s] = true;
+        });
         return next;
       });
-      const firstErrorKey = REQUIRED_FIELDS.find((f) => errors[f.key])?.key
-        ?? (errors['colors_primary_1_hex'] ? 'colors_primary_1_hex'
-          : errors['colors_secondary_1_hex'] ? 'colors_secondary_1_hex'
-          : errors['typography_primary_1_name'] ? 'typography_primary_1_name'
-          : 'typography_secondary_1_name');
+      const firstErrorKey =
+        REQUIRED_FIELDS.find((f) => errors[f.key])?.key ??
+        (errors["colors_primary_1_hex"]
+          ? "colors_primary_1_hex"
+          : errors["colors_secondary_1_hex"]
+            ? "colors_secondary_1_hex"
+            : errors["typography_primary_1_name"]
+              ? "typography_primary_1_name"
+              : "typography_secondary_1_name");
       if (firstErrorKey) {
         setTimeout(() => {
           document
@@ -593,7 +704,6 @@ export default function App() {
       section_order: sectionOrder.filter((id) => sectionVisibility[id]),
       section_labels: sectionLabels,
     };
-
 
     const normalizedPlaceholders = placeholderSections
       .map((section) => ({ ...section }))
@@ -841,24 +951,26 @@ export default function App() {
           </>
         );
       case "colors": {
-        const removeColor = (type: 'primary' | 'secondary', idx: number) => {
-          const count = type === 'primary' ? primaryColorCount : secondaryColorCount;
-          const setCount = type === 'primary' ? setPrimaryColorCount : setSecondaryColorCount;
-          const fields = ['hex', 'name', 'cmyk'];
-          setFormData(prev => {
+        const removeColor = (type: "primary" | "secondary", idx: number) => {
+          const count =
+            type === "primary" ? primaryColorCount : secondaryColorCount;
+          const setCount =
+            type === "primary" ? setPrimaryColorCount : setSecondaryColorCount;
+          const fields = ["hex", "name", "cmyk"];
+          setFormData((prev) => {
             const next = { ...prev };
             for (let i = idx; i < count; i++) {
-              fields.forEach(f => {
+              fields.forEach((f) => {
                 const fromKey = `colors_${type}_${i + 1}_${f}`;
                 const toKey = `colors_${type}_${i}_${f}`;
                 if (next[fromKey] !== undefined) next[toKey] = next[fromKey];
                 else delete next[toKey];
               });
             }
-            fields.forEach(f => delete next[`colors_${type}_${count}_${f}`]);
+            fields.forEach((f) => delete next[`colors_${type}_${count}_${f}`]);
             return next;
           });
-          setCount(c => c - 1);
+          setCount((c) => c - 1);
         };
 
         return (
@@ -876,44 +988,55 @@ export default function App() {
               </h3>
               <button
                 type="button"
-                onClick={() => setPrimaryColorCount(c => c + 1)}
+                onClick={() => setPrimaryColorCount((c) => c + 1)}
                 className="flex items-center gap-1 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-100"
               >
                 <Plus className="h-4 w-4" /> Add Primary Color
               </button>
             </div>
-            {Array.from({ length: primaryColorCount }, (_, i) => i + 1).map(i => (
-              <div key={i} id={i === 1 ? 'field-colors_primary_1_hex' : undefined} className="relative">
-                {validationErrors['colors_primary_1_hex'] && i === 1 && (
-                  <p className="mb-1 text-sm text-red-600 flex items-center gap-1">
-                    <AlertCircle className="h-4 w-4" /> {validationErrors['colors_primary_1_hex']}
-                  </p>
-                )}
-                <div className="relative">
-                  <ColorInput
-                    label={`Primary Color ${i}`}
-                    prefix={`colors_primary_${i}`}
-                    values={formData}
-                    onChange={(key, val) => {
-                      handleInputChange(key, val);
-                      if (i === 1 && key === `colors_primary_1_hex`) {
-                        setValidationErrors(prev => { const n = { ...prev }; delete n['colors_primary_1_hex']; return n; });
-                      }
-                    }}
-                  />
-                  {i > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removeColor('primary', i)}
-                      className="absolute top-3 right-3 rounded-md p-1 text-gray-400 hover:bg-red-50 hover:text-red-500"
-                      title="Remove"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+            {Array.from({ length: primaryColorCount }, (_, i) => i + 1).map(
+              (i) => (
+                <div
+                  key={i}
+                  id={i === 1 ? "field-colors_primary_1_hex" : undefined}
+                  className="relative"
+                >
+                  {validationErrors["colors_primary_1_hex"] && i === 1 && (
+                    <p className="mb-1 text-sm text-red-600 flex items-center gap-1">
+                      <AlertCircle className="h-4 w-4" />{" "}
+                      {validationErrors["colors_primary_1_hex"]}
+                    </p>
                   )}
+                  <div className="relative">
+                    <ColorInput
+                      label={`Primary Color ${i}`}
+                      prefix={`colors_primary_${i}`}
+                      values={formData}
+                      onChange={(key, val) => {
+                        handleInputChange(key, val);
+                        if (i === 1 && key === `colors_primary_1_hex`) {
+                          setValidationErrors((prev) => {
+                            const n = { ...prev };
+                            delete n["colors_primary_1_hex"];
+                            return n;
+                          });
+                        }
+                      }}
+                    />
+                    {i > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeColor("primary", i)}
+                        className="absolute top-3 right-3 rounded-md p-1 text-gray-400 hover:bg-red-50 hover:text-red-500"
+                        title="Remove"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ),
+            )}
 
             <div className="flex items-center justify-between mt-6 mb-4">
               <h3 className="text-md font-medium text-gray-900">
@@ -921,66 +1044,81 @@ export default function App() {
               </h3>
               <button
                 type="button"
-                onClick={() => setSecondaryColorCount(c => c + 1)}
+                onClick={() => setSecondaryColorCount((c) => c + 1)}
                 className="flex items-center gap-1 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-100"
               >
                 <Plus className="h-4 w-4" /> Add Secondary Color
               </button>
             </div>
-            {Array.from({ length: secondaryColorCount }, (_, i) => i + 1).map(i => (
-              <div key={i} id={i === 1 ? 'field-colors_secondary_1_hex' : undefined} className="relative">
-                {validationErrors['colors_secondary_1_hex'] && i === 1 && (
-                  <p className="mb-1 text-sm text-red-600 flex items-center gap-1">
-                    <AlertCircle className="h-4 w-4" /> {validationErrors['colors_secondary_1_hex']}
-                  </p>
-                )}
-                <div className="relative">
-                  <ColorInput
-                    label={`Secondary Color ${i}`}
-                    prefix={`colors_secondary_${i}`}
-                    values={formData}
-                    onChange={(key, val) => {
-                      handleInputChange(key, val);
-                      if (i === 1 && key === `colors_secondary_1_hex`) {
-                        setValidationErrors(prev => { const n = { ...prev }; delete n['colors_secondary_1_hex']; return n; });
-                      }
-                    }}
-                  />
-                  {i > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removeColor('secondary', i)}
-                      className="absolute top-3 right-3 rounded-md p-1 text-gray-400 hover:bg-red-50 hover:text-red-500"
-                      title="Remove"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+            {Array.from({ length: secondaryColorCount }, (_, i) => i + 1).map(
+              (i) => (
+                <div
+                  key={i}
+                  id={i === 1 ? "field-colors_secondary_1_hex" : undefined}
+                  className="relative"
+                >
+                  {validationErrors["colors_secondary_1_hex"] && i === 1 && (
+                    <p className="mb-1 text-sm text-red-600 flex items-center gap-1">
+                      <AlertCircle className="h-4 w-4" />{" "}
+                      {validationErrors["colors_secondary_1_hex"]}
+                    </p>
                   )}
+                  <div className="relative">
+                    <ColorInput
+                      label={`Secondary Color ${i}`}
+                      prefix={`colors_secondary_${i}`}
+                      values={formData}
+                      onChange={(key, val) => {
+                        handleInputChange(key, val);
+                        if (i === 1 && key === `colors_secondary_1_hex`) {
+                          setValidationErrors((prev) => {
+                            const n = { ...prev };
+                            delete n["colors_secondary_1_hex"];
+                            return n;
+                          });
+                        }
+                      }}
+                    />
+                    {i > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeColor("secondary", i)}
+                        className="absolute top-3 right-3 rounded-md p-1 text-gray-400 hover:bg-red-50 hover:text-red-500"
+                        title="Remove"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ),
+            )}
           </>
         );
       }
       case "typography": {
-        const removeFont = (type: 'primary' | 'secondary', idx: number) => {
-          const count = type === 'primary' ? primaryFontCount : secondaryFontCount;
-          const setCount = type === 'primary' ? setPrimaryFontCount : setSecondaryFontCount;
-          const fields = ['name', 'file'];
-          setFormData(prev => {
+        const removeFont = (type: "primary" | "secondary", idx: number) => {
+          const count =
+            type === "primary" ? primaryFontCount : secondaryFontCount;
+          const setCount =
+            type === "primary" ? setPrimaryFontCount : setSecondaryFontCount;
+          const fields = ["name", "file"];
+          setFormData((prev) => {
             const next = { ...prev };
             for (let i = idx; i < count; i++) {
-              fields.forEach(f => {
+              fields.forEach((f) => {
                 const fromKey = `typography_${type}_${i + 1}_${f}`;
                 const toKey = `typography_${type}_${i}_${f}`;
                 if (next[fromKey] !== undefined) next[toKey] = next[fromKey];
                 else delete next[toKey];
               });
             }
-            fields.forEach(f => delete next[`typography_${type}_${count}_${f}`]);
+            fields.forEach(
+              (f) => delete next[`typography_${type}_${count}_${f}`],
+            );
             return next;
           });
-          setCount(c => c - 1);
+          setCount((c) => c - 1);
         };
 
         return (
@@ -991,24 +1129,32 @@ export default function App() {
               </h3>
               <button
                 type="button"
-                onClick={() => setPrimaryFontCount(c => c + 1)}
+                onClick={() => setPrimaryFontCount((c) => c + 1)}
                 className="flex items-center gap-1 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-100"
               >
                 <Plus className="h-4 w-4" /> Add Primary Font
               </button>
             </div>
-            {Array.from({ length: primaryFontCount }, (_, i) => i + 1).map(i => (
-              <TypographyFontCard
-                key={i}
-                type="primary"
-                i={i}
-                formData={formData}
-                validationErrors={validationErrors}
-                handleInputChange={handleInputChange}
-                removeFont={removeFont}
-                clearValidationError={key => setValidationErrors(prev => { const next = { ...prev }; delete next[key]; return next; })}
-              />
-            ))}
+            {Array.from({ length: primaryFontCount }, (_, i) => i + 1).map(
+              (i) => (
+                <TypographyFontCard
+                  key={i}
+                  type="primary"
+                  i={i}
+                  formData={formData}
+                  validationErrors={validationErrors}
+                  handleInputChange={handleInputChange}
+                  removeFont={removeFont}
+                  clearValidationError={(key) =>
+                    setValidationErrors((prev) => {
+                      const next = { ...prev };
+                      delete next[key];
+                      return next;
+                    })
+                  }
+                />
+              ),
+            )}
 
             <div className="flex items-center justify-between mt-6 mb-4">
               <h3 className="text-md font-medium text-gray-900">
@@ -1016,24 +1162,32 @@ export default function App() {
               </h3>
               <button
                 type="button"
-                onClick={() => setSecondaryFontCount(c => c + 1)}
+                onClick={() => setSecondaryFontCount((c) => c + 1)}
                 className="flex items-center gap-1 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-100"
               >
                 <Plus className="h-4 w-4" /> Add Secondary Font
               </button>
             </div>
-            {Array.from({ length: secondaryFontCount }, (_, i) => i + 1).map(i => (
-              <TypographyFontCard
-                key={i}
-                type="secondary"
-                i={i}
-                formData={formData}
-                validationErrors={validationErrors}
-                handleInputChange={handleInputChange}
-                removeFont={removeFont}
-                clearValidationError={key => setValidationErrors(prev => { const next = { ...prev }; delete next[key]; return next; })}
-              />
-            ))}
+            {Array.from({ length: secondaryFontCount }, (_, i) => i + 1).map(
+              (i) => (
+                <TypographyFontCard
+                  key={i}
+                  type="secondary"
+                  i={i}
+                  formData={formData}
+                  validationErrors={validationErrors}
+                  handleInputChange={handleInputChange}
+                  removeFont={removeFont}
+                  clearValidationError={(key) =>
+                    setValidationErrors((prev) => {
+                      const next = { ...prev };
+                      delete next[key];
+                      return next;
+                    })
+                  }
+                />
+              ),
+            )}
 
             <div className="mt-6">
               <FileUpload
@@ -1217,7 +1371,9 @@ export default function App() {
         <form id="branding-form" onSubmit={handleSubmit} className="space-y-6">
           {showDraftBanner && (
             <div className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              <span>Draft restored — your previous progress has been loaded.</span>
+              <span>
+                Draft restored — your previous progress has been loaded.
+              </span>
               <button
                 type="button"
                 onClick={clearDraft}
@@ -1230,7 +1386,10 @@ export default function App() {
 
           {/* Load existing client */}
           <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
-            <label htmlFor="load-client-input" className="shrink-0 text-sm font-medium text-gray-700">
+            <label
+              htmlFor="load-client-input"
+              className="shrink-0 text-sm font-medium text-gray-700"
+            >
               Load Client
             </label>
             <div className="relative flex-1" ref={autocompleteRef}>
@@ -1241,26 +1400,33 @@ export default function App() {
                 onChange={(e) => {
                   const val = e.target.value;
                   setLoadClientName(val);
-                  setLoadClientStatus('idle');
+                  setLoadClientStatus("idle");
                   setLoadClientError(null);
                   setActiveSuggestionIndex(-1);
                   setShowSuggestions(true);
-                  if (!val.trim()) setPageCheckStatus('idle');
+                  if (!val.trim()) setPageCheckStatus("idle");
                 }}
                 onFocus={() => setShowSuggestions(true)}
                 onKeyDown={(e) => {
                   const filtered = allClients.filter((c) =>
-                    c.toLowerCase().includes(loadClientName.toLowerCase().trim())
+                    c
+                      .toLowerCase()
+                      .includes(loadClientName.toLowerCase().trim()),
                   );
-                  if (e.key === 'ArrowDown') {
+                  if (e.key === "ArrowDown") {
                     e.preventDefault();
-                    setActiveSuggestionIndex((i) => Math.min(i + 1, filtered.length - 1));
-                  } else if (e.key === 'ArrowUp') {
+                    setActiveSuggestionIndex((i) =>
+                      Math.min(i + 1, filtered.length - 1),
+                    );
+                  } else if (e.key === "ArrowUp") {
                     e.preventDefault();
                     setActiveSuggestionIndex((i) => Math.max(i - 1, -1));
-                  } else if (e.key === 'Enter') {
+                  } else if (e.key === "Enter") {
                     e.preventDefault();
-                    if (activeSuggestionIndex >= 0 && filtered[activeSuggestionIndex]) {
+                    if (
+                      activeSuggestionIndex >= 0 &&
+                      filtered[activeSuggestionIndex]
+                    ) {
                       setLoadClientName(filtered[activeSuggestionIndex]);
                       setShowSuggestions(false);
                       setActiveSuggestionIndex(-1);
@@ -1268,63 +1434,69 @@ export default function App() {
                       setShowSuggestions(false);
                       handleLoadClient();
                     }
-                  } else if (e.key === 'Escape') {
+                  } else if (e.key === "Escape") {
                     setShowSuggestions(false);
                     setActiveSuggestionIndex(-1);
                   }
                 }}
                 placeholder="Search brand name…"
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-                disabled={loadClientStatus === 'loading'}
+                disabled={loadClientStatus === "loading"}
                 autoComplete="off"
               />
-              {showSuggestions && loadClientName.trim() && (() => {
-                const filtered = allClients.filter((c) =>
-                  c.toLowerCase().includes(loadClientName.toLowerCase().trim())
-                );
-                return filtered.length > 0 ? (
-                  <ul className="absolute z-50 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
-                    {filtered.map((client, i) => (
-                      <li
-                        key={client}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          setLoadClientName(client);
-                          setShowSuggestions(false);
-                          setActiveSuggestionIndex(-1);
-                        }}
-                        className={`cursor-pointer px-3 py-2 text-sm ${
-                          i === activeSuggestionIndex
-                            ? 'bg-indigo-600 text-white'
-                            : 'text-gray-800 hover:bg-gray-100'
-                        }`}
-                      >
-                        {client}
-                      </li>
-                    ))}
-                  </ul>
-                ) : null;
-              })()}
+              {showSuggestions &&
+                loadClientName.trim() &&
+                (() => {
+                  const filtered = allClients.filter((c) =>
+                    c
+                      .toLowerCase()
+                      .includes(loadClientName.toLowerCase().trim()),
+                  );
+                  return filtered.length > 0 ? (
+                    <ul className="absolute z-50 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+                      {filtered.map((client, i) => (
+                        <li
+                          key={client}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            setLoadClientName(client);
+                            setShowSuggestions(false);
+                            setActiveSuggestionIndex(-1);
+                          }}
+                          className={`cursor-pointer px-3 py-2 text-sm ${
+                            i === activeSuggestionIndex
+                              ? "bg-indigo-600 text-white"
+                              : "text-gray-800 hover:bg-gray-100"
+                          }`}
+                        >
+                          {client}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null;
+                })()}
             </div>
             <button
               type="button"
               onClick={handleLoadClient}
-              disabled={loadClientStatus === 'loading' || !loadClientName.trim()}
+              disabled={
+                loadClientStatus === "loading" || !loadClientName.trim()
+              }
               className="shrink-0 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loadClientStatus === 'loading' ? (
+              {loadClientStatus === "loading" ? (
                 <span className="flex items-center gap-1">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Loading…
                 </span>
               ) : (
-                'Load'
+                "Load"
               )}
             </button>
-            {pageCheckStatus === 'checking' && (
+            {pageCheckStatus === "checking" && (
               <Loader2 className="h-4 w-4 shrink-0 animate-spin text-gray-400" />
             )}
-            {pageCheckStatus === 'found' && (
+            {pageCheckStatus === "found" && (
               <a
                 href={`${S3_BRAND_BASE}/${sanitizeBrandName(loadClientName.trim())}/file.html`}
                 target="_blank"
@@ -1335,15 +1507,17 @@ export default function App() {
                 Visit Page
               </a>
             )}
-            {pageCheckStatus === 'not-found' && loadClientName.trim() && (
-              <span className="shrink-0 text-sm text-gray-400">No page found</span>
+            {pageCheckStatus === "not-found" && loadClientName.trim() && (
+              <span className="shrink-0 text-sm text-gray-400">
+                No page found
+              </span>
             )}
-            {loadClientStatus === 'success' && (
+            {loadClientStatus === "success" && (
               <span className="flex shrink-0 items-center gap-1 text-sm text-green-600">
                 <CheckCircle className="h-4 w-4" /> Loaded
               </span>
             )}
-            {loadClientStatus === 'error' && loadClientError && (
+            {loadClientStatus === "error" && loadClientError && (
               <span className="flex shrink-0 items-center gap-1 text-sm text-red-600">
                 <AlertCircle className="h-4 w-4" /> {loadClientError}
               </span>
@@ -1828,19 +2002,21 @@ export default function App() {
               {error}
             </div>
           )}
-          {draftSavedAt && Object.keys(validationErrors).length === 0 && !error && (
-            <div className="mr-auto flex items-center gap-3 text-sm text-gray-500">
-              <CheckCircle className="h-4 w-4 text-green-500" />
-              Draft saved {formatDraftTime(draftSavedAt)}
-              <button
-                type="button"
-                onClick={clearDraft}
-                className="text-xs text-gray-400 underline underline-offset-2 hover:text-gray-600"
-              >
-                Clear
-              </button>
-            </div>
-          )}
+          {draftSavedAt &&
+            Object.keys(validationErrors).length === 0 &&
+            !error && (
+              <div className="mr-auto flex items-center gap-3 text-sm text-gray-500">
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                Draft saved {formatDraftTime(draftSavedAt)}
+                <button
+                  type="button"
+                  onClick={clearDraft}
+                  className="text-xs text-gray-400 underline underline-offset-2 hover:text-gray-600"
+                >
+                  Clear
+                </button>
+              </div>
+            )}
           <button
             type="submit"
             form="branding-form"
@@ -1895,10 +2071,10 @@ export default function App() {
                   </a>
                   <button
                     type="button"
-                    onClick={() => copyToClipboard(result.s3_url, 's3')}
+                    onClick={() => copyToClipboard(result.s3_url, "s3")}
                     className="shrink-0 rounded border border-gray-300 px-2 py-1 text-xs text-gray-500 hover:text-gray-700"
                   >
-                    {copiedUrl === 's3' ? 'Copied!' : 'Copy'}
+                    {copiedUrl === "s3" ? "Copied!" : "Copy"}
                   </button>
                 </div>
               </div>
@@ -1914,10 +2090,10 @@ export default function App() {
                     </span>
                     <button
                       type="button"
-                      onClick={() => copyToClipboard(result.vars_url!, 'vars')}
+                      onClick={() => copyToClipboard(result.vars_url!, "vars")}
                       className="shrink-0 rounded border border-gray-300 px-2 py-1 text-xs text-gray-500 hover:text-gray-700"
                     >
-                      {copiedUrl === 'vars' ? 'Copied!' : 'Copy'}
+                      {copiedUrl === "vars" ? "Copied!" : "Copy"}
                     </button>
                   </div>
                 </div>
@@ -1925,7 +2101,10 @@ export default function App() {
 
               <div className="flex gap-3 justify-center">
                 <button
-                  onClick={() => { setResult(null); setCopiedUrl(null); }}
+                  onClick={() => {
+                    setResult(null);
+                    setCopiedUrl(null);
+                  }}
                   className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium"
                 >
                   Close
