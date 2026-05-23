@@ -153,6 +153,83 @@ const createEmptyPlaceholder = (): PlaceholderSection => {
 const placeholderHasContent = (section: PlaceholderSection) =>
   Object.values(section).some((value) => value?.trim().length > 0);
 
+type TypographyFontCardProps = {
+  type: 'primary' | 'secondary';
+  i: number;
+  formData: Record<string, string>;
+  validationErrors: Record<string, string>;
+  handleInputChange: (key: string, value: string) => void;
+  removeFont: (type: 'primary' | 'secondary', idx: number) => void;
+  clearValidationError?: (key: string) => void;
+};
+
+function TypographyFontCard({
+  type,
+  i,
+  formData,
+  validationErrors,
+  handleInputChange,
+  removeFont,
+  clearValidationError,
+}: TypographyFontCardProps) {
+  const nameKey = `typography_${type}_${i}_name`;
+  const fileKey = `typography_${type}_${i}_file`;
+  const isFirst = i === 1;
+  const errorKey = `typography_${type}_1_name`;
+
+  return (
+    <div
+      id={isFirst ? `field-${errorKey}` : undefined}
+      className="relative rounded-lg border border-gray-200 bg-gray-50 p-4 mb-4"
+    >
+      {isFirst && validationErrors[errorKey] && (
+        <p className="mb-2 text-sm text-red-600 flex items-center gap-1">
+          <AlertCircle className="h-4 w-4" /> {validationErrors[errorKey]}
+        </p>
+      )}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-xs font-medium text-gray-500 mb-1">
+            Font Name {isFirst && <span className="text-red-500">*</span>}
+          </label>
+          <input
+            type="text"
+            value={formData[nameKey] || ''}
+            onChange={e => {
+              handleInputChange(nameKey, e.target.value);
+              if (isFirst) clearValidationError?.(errorKey);
+            }}
+            placeholder={type === 'primary' ? 'e.g. Inter' : 'e.g. Playfair Display'}
+            className={`w-full px-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
+              isFirst && validationErrors[errorKey] ? 'border-red-400 ring-1 ring-red-300' : 'border-gray-300'
+            }`}
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-500 mb-1">Font File</label>
+          <FileUpload
+            label=""
+            fieldKey={fileKey}
+            onUploadComplete={handleInputChange}
+            currentUrl={formData[fileKey]}
+            accept=".ttf,.otf,.woff,.woff2,.zip"
+          />
+        </div>
+      </div>
+      {i > 1 && (
+        <button
+          type="button"
+          onClick={() => removeFont(type, i)}
+          className="absolute top-3 right-3 rounded-md p-1 text-gray-400 hover:bg-red-50 hover:text-red-500"
+          title="Remove"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   const [formData, setFormData] = useState<Record<string, string>>(
     () => (loadDraft()?.formData as Record<string, string>) ?? {},
@@ -906,64 +983,6 @@ export default function App() {
           setCount(c => c - 1);
         };
 
-        const FontCard = ({ type, i }: { type: 'primary' | 'secondary'; i: number }) => {
-          const nameKey = `typography_${type}_${i}_name`;
-          const fileKey = `typography_${type}_${i}_file`;
-          const isFirst = i === 1;
-          const errorKey = `typography_${type}_1_name`;
-          return (
-            <div
-              id={isFirst ? `field-${errorKey}` : undefined}
-              className="relative rounded-lg border border-gray-200 bg-gray-50 p-4 mb-4"
-            >
-              {isFirst && validationErrors[errorKey] && (
-                <p className="mb-2 text-sm text-red-600 flex items-center gap-1">
-                  <AlertCircle className="h-4 w-4" /> {validationErrors[errorKey]}
-                </p>
-              )}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">
-                    Font Name {isFirst && <span className="text-red-500">*</span>}
-                  </label>
-                  <input
-                    type="text"
-                    value={formData[nameKey] || ''}
-                    onChange={e => {
-                      handleInputChange(nameKey, e.target.value);
-                      if (isFirst) setValidationErrors(prev => { const n = { ...prev }; delete n[errorKey]; return n; });
-                    }}
-                    placeholder={type === 'primary' ? 'e.g. Inter' : 'e.g. Playfair Display'}
-                    className={`w-full px-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
-                      isFirst && validationErrors[errorKey] ? 'border-red-400 ring-1 ring-red-300' : 'border-gray-300'
-                    }`}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Font File</label>
-                  <FileUpload
-                    label=""
-                    fieldKey={fileKey}
-                    onUploadComplete={handleInputChange}
-                    currentUrl={formData[fileKey]}
-                    accept=".ttf,.otf,.woff,.woff2,.zip"
-                  />
-                </div>
-              </div>
-              {i > 1 && (
-                <button
-                  type="button"
-                  onClick={() => removeFont(type, i)}
-                  className="absolute top-3 right-3 rounded-md p-1 text-gray-400 hover:bg-red-50 hover:text-red-500"
-                  title="Remove"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              )}
-            </div>
-          );
-        };
-
         return (
           <>
             <div className="flex items-center justify-between mb-4">
@@ -979,7 +998,16 @@ export default function App() {
               </button>
             </div>
             {Array.from({ length: primaryFontCount }, (_, i) => i + 1).map(i => (
-              <FontCard key={i} type="primary" i={i} />
+              <TypographyFontCard
+                key={i}
+                type="primary"
+                i={i}
+                formData={formData}
+                validationErrors={validationErrors}
+                handleInputChange={handleInputChange}
+                removeFont={removeFont}
+                clearValidationError={key => setValidationErrors(prev => { const next = { ...prev }; delete next[key]; return next; })}
+              />
             ))}
 
             <div className="flex items-center justify-between mt-6 mb-4">
@@ -995,7 +1023,16 @@ export default function App() {
               </button>
             </div>
             {Array.from({ length: secondaryFontCount }, (_, i) => i + 1).map(i => (
-              <FontCard key={i} type="secondary" i={i} />
+              <TypographyFontCard
+                key={i}
+                type="secondary"
+                i={i}
+                formData={formData}
+                validationErrors={validationErrors}
+                handleInputChange={handleInputChange}
+                removeFont={removeFont}
+                clearValidationError={key => setValidationErrors(prev => { const next = { ...prev }; delete next[key]; return next; })}
+              />
             ))}
 
             <div className="mt-6">
