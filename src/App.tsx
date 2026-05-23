@@ -701,7 +701,9 @@ export default function App() {
 
     const payload: Record<string, unknown> = {
       ...formData,
-      section_order: sectionOrder.filter((id) => sectionVisibility[id]),
+      section_order: sectionOrder.filter(
+        (id) => sectionVisibility[id] || REQUIRED_SECTIONS.has(id),
+      ),
       section_labels: sectionLabels,
     };
 
