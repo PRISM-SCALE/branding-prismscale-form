@@ -90,15 +90,15 @@ export const FileUpload: React.FC<FileUploadProps> = ({ label, fieldKey, onUploa
             </button>
           </div>
         ) : (
-          <div className="flex items-center gap-2 bg-green-50 text-green-700 px-3 py-2 rounded-md border border-green-200 text-sm">
-            <Check className="w-4 h-4" />
-            <span className="truncate max-w-[200px]">{currentUrl.split('/').pop()}</span>
+          <div className="flex items-center gap-2 bg-green-50 text-green-700 text-sm px-[0.8em] py-[0.5em] rounded-md border border-green-200 w-full max-w-[20ch]">
+            <Check className="size-[1em] shrink-0" />
+            <span className="truncate">{currentUrl.split('/').pop()}</span>
             <button
               onClick={handleClear}
-              className="ml-2 p-1 hover:bg-green-100 rounded-full"
+              className="ml-2 p-1 hover:bg-red-50 hover:text-red-500 rounded-full cursor-pointer"
               title="Remove file"
             >
-              <X className="w-3 h-3" />
+              <X className="size-[0.8em] shrink-0" />
             </button>
           </div>
         )}

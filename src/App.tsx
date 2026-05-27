@@ -97,6 +97,29 @@ const REQUIRED_SECTIONS = new Set([
   "colors",
 ]);
 
+type ColorGroup = "primary" | "secondary" | "tertiary";
+
+const COLOR_GROUPS: readonly ColorGroup[] = ["primary", "secondary", "tertiary"] as const;
+
+const DEFAULT_COLOR_GROUP_LABELS: Record<ColorGroup, string> = {
+  primary: "Primary Colors",
+  secondary: "Secondary Colors",
+  tertiary: "Tertiary Colors",
+};
+
+type DynamicTileSection = "illustrations" | "images";
+
+const DEFAULT_DYNAMIC_TILE_LABEL: Record<DynamicTileSection, string> = {
+  illustrations: "Illustration",
+  images: "Image",
+};
+
+const DEFAULT_COLLATERAL_ITEMS: { id: string; label: string }[] = [
+  { id: "businesscard", label: "Business Card" },
+  { id: "letterhead", label: "Letterhead" },
+  { id: "emailsignature", label: "Email Signature" },
+];
+
 // Matches lambda_function.py _sanitize_brand_name exactly
 function sanitizeBrandName(name: string): string {
   return (
@@ -134,6 +157,32 @@ function loadDraft() {
   } catch {
     return null;
   }
+}
+
+const LEGACY_COLLATERAL_KEY_MAP: Record<string, string> = {
+  collaterals_businesscard_download_link:
+    "collaterals_item_businesscard_download_link",
+  collaterals_letterhead_download_link:
+    "collaterals_item_letterhead_download_link",
+  collaterals_emailsignature_download_link:
+    "collaterals_item_emailsignature_download_link",
+};
+
+function migrateFormData(
+  source: Record<string, unknown> | undefined,
+): Record<string, string> {
+  if (!source) return {};
+  const data = { ...(source as Record<string, string>) };
+  for (const [legacyKey, newKey] of Object.entries(LEGACY_COLLATERAL_KEY_MAP)) {
+    if (data[legacyKey] && !data[newKey]) {
+      data[newKey] = data[legacyKey];
+    }
+    delete data[legacyKey];
+  }
+  delete data.logo_client_name;
+  delete data.logo_download_all_logos_secondary;
+  delete data.illustrations_hero_download_link;
+  return data;
 }
 
 function formatDraftTime(date: Date): string {
@@ -263,8 +312,8 @@ function TypographyFontCard({
 }
 
 export default function App() {
-  const [formData, setFormData] = useState<Record<string, string>>(
-    () => (loadDraft()?.formData as Record<string, string>) ?? {},
+  const [formData, setFormData] = useState<Record<string, string>>(() =>
+    migrateFormData(loadDraft()?.formData as Record<string, unknown> | undefined),
   );
   const [sectionOrder, setSectionOrder] = useState<string[]>(
     () => (loadDraft()?.sectionOrder as string[]) ?? DEFAULT_SECTION_ORDER,
@@ -339,6 +388,59 @@ export default function App() {
         "typography_secondary",
       )
     );
+  });
+  const [tertiaryColorCount, setTertiaryColorCount] = useState<number>(() => {
+    const draft = loadDraft();
+    const stored = draft?.tertiaryColorCount;
+    if (typeof stored === "number" && stored > 0) return stored;
+    const derived = deriveIndexedCount(
+      draft?.formData as Record<string, string>,
+      "colors_tertiary",
+    );
+    return Math.max(1, derived);
+  });
+  const [colorGroupLabels, setColorGroupLabels] = useState<
+    Record<ColorGroup, string>
+  >(() => {
+    const stored = loadDraft()?.colorGroupLabels as
+      | Partial<Record<ColorGroup, string>>
+      | undefined;
+    return { ...DEFAULT_COLOR_GROUP_LABELS, ...(stored ?? {}) };
+  });
+  const [illustrationTileCount, setIllustrationTileCount] = useState<number>(
+    () => {
+      const draft = loadDraft();
+      const stored = draft?.illustrationTileCount;
+      if (typeof stored === "number" && stored > 0) return stored;
+      return 4;
+    },
+  );
+  const [illustrationTileLabels, setIllustrationTileLabels] = useState<
+    Record<number, string>
+  >(() => {
+    const stored = loadDraft()?.illustrationTileLabels;
+    return (stored as Record<number, string>) ?? {};
+  });
+  const [imageTileCount, setImageTileCount] = useState<number>(() => {
+    const draft = loadDraft();
+    const stored = draft?.imageTileCount;
+    if (typeof stored === "number" && stored > 0) return stored;
+    return 4;
+  });
+  const [imageTileLabels, setImageTileLabels] = useState<Record<number, string>>(
+    () => {
+      const stored = loadDraft()?.imageTileLabels;
+      return (stored as Record<number, string>) ?? {};
+    },
+  );
+  const [collateralItems, setCollateralItems] = useState<
+    { id: string; label: string }[]
+  >(() => {
+    const stored = loadDraft()?.collateralItems as
+      | { id: string; label: string }[]
+      | undefined;
+    if (Array.isArray(stored) && stored.length > 0) return stored;
+    return DEFAULT_COLLATERAL_ITEMS.map((item) => ({ ...item }));
   });
   const [loadClientName, setLoadClientName] = useState("");
   const [loadClientStatus, setLoadClientStatus] = useState<
@@ -420,8 +522,15 @@ export default function App() {
             placeholderSections,
             primaryColorCount,
             secondaryColorCount,
+            tertiaryColorCount,
+            colorGroupLabels,
             primaryFontCount,
             secondaryFontCount,
+            illustrationTileCount,
+            illustrationTileLabels,
+            imageTileCount,
+            imageTileLabels,
+            collateralItems,
             savedAt: new Date().toISOString(),
           }),
         );
@@ -439,8 +548,15 @@ export default function App() {
     placeholderSections,
     primaryColorCount,
     secondaryColorCount,
+    tertiaryColorCount,
+    colorGroupLabels,
     primaryFontCount,
     secondaryFontCount,
+    illustrationTileCount,
+    illustrationTileLabels,
+    imageTileCount,
+    imageTileLabels,
+    collateralItems,
   ]);
 
   const clearDraft = () => {
@@ -455,8 +571,15 @@ export default function App() {
     setShowDraftBanner(false);
     setPrimaryColorCount(1);
     setSecondaryColorCount(1);
+    setTertiaryColorCount(1);
+    setColorGroupLabels({ ...DEFAULT_COLOR_GROUP_LABELS });
     setPrimaryFontCount(1);
     setSecondaryFontCount(1);
+    setIllustrationTileCount(4);
+    setIllustrationTileLabels({});
+    setImageTileCount(4);
+    setImageTileLabels({});
+    setCollateralItems(DEFAULT_COLLATERAL_ITEMS.map((item) => ({ ...item })));
   };
 
   const copyToClipboard = (text: string, which: "s3" | "vars") => {
@@ -503,13 +626,24 @@ export default function App() {
         (vars.placeholder_sections as PlaceholderSection[]) ?? [],
       );
 
+      const incomingColorGroupLabels = vars.colors_group_labels as
+        | Partial<Record<ColorGroup, string>>
+        | undefined;
+      setColorGroupLabels({
+        ...DEFAULT_COLOR_GROUP_LABELS,
+        ...(incomingColorGroupLabels ?? {}),
+      });
+
       const {
         section_order: _o,
         section_labels: _l,
         placeholder_sections: _p,
+        colors_group_labels: _cgl,
+        collateral_items: _ci,
+        collateralItems: _ci2,
         ...rest
       } = vars;
-      const restData = rest as Record<string, string>;
+      const restData = migrateFormData(rest as Record<string, unknown>);
       setFormData(restData);
       setPrimaryColorCount(
         Math.max(1, deriveIndexedCount(restData, "colors_primary")),
@@ -517,12 +651,38 @@ export default function App() {
       setSecondaryColorCount(
         Math.max(1, deriveIndexedCount(restData, "colors_secondary")),
       );
+      setTertiaryColorCount(
+        Math.max(1, deriveIndexedCount(restData, "colors_tertiary")),
+      );
       setPrimaryFontCount(
         Math.max(1, deriveIndexedCount(restData, "typography_primary")),
       );
       setSecondaryFontCount(
         Math.max(1, deriveIndexedCount(restData, "typography_secondary")),
       );
+      const illustrationCount = Math.max(
+        4,
+        deriveIndexedCount(restData, "illustrations_tile_download_link"),
+      );
+      setIllustrationTileCount(illustrationCount);
+      setIllustrationTileLabels({});
+      const imageCount = Math.max(
+        4,
+        deriveIndexedCount(restData, "images_tile_download_link"),
+      );
+      setImageTileCount(imageCount);
+      setImageTileLabels({});
+      const incomingCollateralItems = (vars.collateral_items ||
+        vars.collateralItems) as
+        | { id: string; label: string }[]
+        | undefined;
+      if (Array.isArray(incomingCollateralItems) && incomingCollateralItems.length > 0) {
+        setCollateralItems(incomingCollateralItems);
+      } else {
+        setCollateralItems(
+          DEFAULT_COLLATERAL_ITEMS.map((item) => ({ ...item })),
+        );
+      }
 
       setValidationErrors({});
       setLoadClientStatus("success");
@@ -705,7 +865,61 @@ export default function App() {
         (id) => sectionVisibility[id] || REQUIRED_SECTIONS.has(id),
       ),
       section_labels: sectionLabels,
+      colors_group_labels: colorGroupLabels,
     };
+
+    const buildTilePayload = (
+      countKey: string,
+      labelKeyTemplate: string,
+      urlKeyTemplate: string,
+      legacyUrlTemplate: string,
+      count: number,
+      labels: Record<number, string>,
+      defaultLabelPrefix: string,
+    ) => {
+      let emitted = 0;
+      for (let i = 1; i <= count; i++) {
+        const url = formData[legacyUrlTemplate.replace("{n}", String(i))];
+        if (!url) continue;
+        emitted += 1;
+        payload[urlKeyTemplate.replace("{n}", String(emitted))] = url;
+        const label =
+          labels[i]?.trim() || `${defaultLabelPrefix} ${emitted}`;
+        payload[labelKeyTemplate.replace("{n}", String(emitted))] = label;
+      }
+      payload[countKey] = String(emitted);
+    };
+
+    buildTilePayload(
+      "images_tile_count",
+      "images_tile_{n}_label",
+      "images_tile_{n}_url",
+      "images_tile_download_link_{n}",
+      imageTileCount,
+      imageTileLabels,
+      DEFAULT_DYNAMIC_TILE_LABEL.images,
+    );
+
+    buildTilePayload(
+      "illustrations_tile_count",
+      "illustrations_tile_{n}_label",
+      "illustrations_tile_{n}_url",
+      "illustrations_tile_download_link_{n}",
+      illustrationTileCount,
+      illustrationTileLabels,
+      DEFAULT_DYNAMIC_TILE_LABEL.illustrations,
+    );
+
+    let collateralEmitted = 0;
+    for (const item of collateralItems) {
+      const url = formData[`collaterals_item_${item.id}_download_link`];
+      if (!url) continue;
+      collateralEmitted += 1;
+      payload[`collaterals_item_${collateralEmitted}_url`] = url;
+      payload[`collaterals_item_${collateralEmitted}_label`] =
+        item.label.trim() || `Collateral ${collateralEmitted}`;
+    }
+    payload.collaterals_item_count = String(collateralEmitted);
 
     const normalizedPlaceholders = placeholderSections
       .map((section) => ({ ...section }))
@@ -828,45 +1042,23 @@ export default function App() {
       case "logo":
         return (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-              <div id="field-logo_download_all_logos">
-                <FileUpload
-                  label="Download All Logos *"
-                  fieldKey="logo_download_all_logos"
-                  onUploadComplete={handleInputChange}
-                  currentUrl={formData.logo_download_all_logos}
-                  accept=".zip"
-                />
-                {validationErrors.logo_download_all_logos && (
-                  <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
-                    <AlertCircle className="h-3 w-3 shrink-0" />
-                    {validationErrors.logo_download_all_logos}
-                  </p>
-                )}
-              </div>
+            <div className="mb-6" id="field-logo_download_all_logos">
               <FileUpload
-                label="Download All Secondary Logos"
-                fieldKey="logo_download_all_logos_secondary"
+                label="Download All Logos *"
+                fieldKey="logo_download_all_logos"
                 onUploadComplete={handleInputChange}
-                currentUrl={formData.logo_download_all_logos_secondary}
+                currentUrl={formData.logo_download_all_logos}
                 accept=".zip"
               />
+              {validationErrors.logo_download_all_logos && (
+                <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
+                  <AlertCircle className="h-3 w-3 shrink-0" />
+                  {validationErrors.logo_download_all_logos}
+                </p>
+              )}
             </div>
 
             <div className="grid grid-cols-1 gap-6 mb-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Client Name (for Logo)
-                </label>
-                <input
-                  type="text"
-                  value={formData.logo_client_name || ""}
-                  onChange={(e) =>
-                    handleInputChange("logo_client_name", e.target.value)
-                  }
-                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                />
-              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Logo Description
@@ -926,13 +1118,13 @@ export default function App() {
                 Favicons
               </h4>
               <FileUpload
-                label="Favicon Light"
+                label="Favicon Primary"
                 fieldKey="logo_favicon_light_download_link"
                 onUploadComplete={handleInputChange}
                 currentUrl={formData.logo_favicon_light_download_link}
               />
               <FileUpload
-                label="Favicon Dark"
+                label="Favicon Secondary"
                 fieldKey="logo_favicon_dark_download_link"
                 onUploadComplete={handleInputChange}
                 currentUrl={formData.logo_favicon_dark_download_link}
@@ -953,26 +1145,121 @@ export default function App() {
           </>
         );
       case "colors": {
-        const removeColor = (type: "primary" | "secondary", idx: number) => {
-          const count =
-            type === "primary" ? primaryColorCount : secondaryColorCount;
-          const setCount =
-            type === "primary" ? setPrimaryColorCount : setSecondaryColorCount;
+        const groupState: Record<
+          ColorGroup,
+          { count: number; setCount: React.Dispatch<React.SetStateAction<number>>; required: boolean }
+        > = {
+          primary: {
+            count: primaryColorCount,
+            setCount: setPrimaryColorCount,
+            required: true,
+          },
+          secondary: {
+            count: secondaryColorCount,
+            setCount: setSecondaryColorCount,
+            required: true,
+          },
+          tertiary: {
+            count: tertiaryColorCount,
+            setCount: setTertiaryColorCount,
+            required: false,
+          },
+        };
+
+        const removeColor = (group: ColorGroup, idx: number) => {
+          const { count, setCount } = groupState[group];
           const fields = ["hex", "name", "cmyk"];
           setFormData((prev) => {
             const next = { ...prev };
             for (let i = idx; i < count; i++) {
               fields.forEach((f) => {
-                const fromKey = `colors_${type}_${i + 1}_${f}`;
-                const toKey = `colors_${type}_${i}_${f}`;
+                const fromKey = `colors_${group}_${i + 1}_${f}`;
+                const toKey = `colors_${group}_${i}_${f}`;
                 if (next[fromKey] !== undefined) next[toKey] = next[fromKey];
                 else delete next[toKey];
               });
             }
-            fields.forEach((f) => delete next[`colors_${type}_${count}_${f}`]);
+            fields.forEach((f) => delete next[`colors_${group}_${count}_${f}`]);
             return next;
           });
-          setCount((c) => c - 1);
+          setCount((c) => Math.max(1, c - 1));
+        };
+
+        const renderGroup = (group: ColorGroup) => {
+          const { count, setCount, required } = groupState[group];
+          const label = colorGroupLabels[group];
+          const validationErrorKey = `colors_${group}_1_hex`;
+          return (
+            <div key={group}>
+              <div className="flex flex-col gap-3 mt-6 mb-4 md:flex-row md:items-center md:justify-between">
+                <div className="flex items-center gap-2 w-full md:max-w-md">
+                  <input
+                    type="text"
+                    value={label}
+                    onChange={(e) =>
+                      setColorGroupLabels((prev) => ({
+                        ...prev,
+                        [group]: e.target.value,
+                      }))
+                    }
+                    placeholder={DEFAULT_COLOR_GROUP_LABELS[group]}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-md font-medium text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                  {required && <span className="text-red-500">*</span>}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCount((c) => c + 1)}
+                  className="flex items-center gap-1 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-100"
+                >
+                  <Plus className="h-4 w-4" /> Add Color
+                </button>
+              </div>
+              {Array.from({ length: count }, (_, i) => i + 1).map((i) => (
+                <div
+                  key={i}
+                  id={i === 1 ? `field-${validationErrorKey}` : undefined}
+                  className="relative"
+                >
+                  {required &&
+                    validationErrors[validationErrorKey] &&
+                    i === 1 && (
+                      <p className="mb-1 text-sm text-red-600 flex items-center gap-1">
+                        <AlertCircle className="h-4 w-4" />{" "}
+                        {validationErrors[validationErrorKey]}
+                      </p>
+                    )}
+                  <div className="relative">
+                    <ColorInput
+                      label={`${label || DEFAULT_COLOR_GROUP_LABELS[group]} ${i}`}
+                      prefix={`colors_${group}_${i}`}
+                      values={formData}
+                      onChange={(key, val) => {
+                        handleInputChange(key, val);
+                        if (required && i === 1 && key === validationErrorKey) {
+                          setValidationErrors((prev) => {
+                            const n = { ...prev };
+                            delete n[validationErrorKey];
+                            return n;
+                          });
+                        }
+                      }}
+                    />
+                    {i > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeColor(group, i)}
+                        className="absolute top-3 right-3 rounded-md p-1 text-gray-400 hover:bg-red-50 hover:text-red-500"
+                        title="Remove"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
         };
 
         return (
@@ -983,118 +1270,7 @@ export default function App() {
               onUploadComplete={handleInputChange}
               currentUrl={formData.colors_download_link}
             />
-
-            <div className="flex items-center justify-between mt-6 mb-4">
-              <h3 className="text-md font-medium text-gray-900">
-                Primary Colors <span className="text-red-500">*</span>
-              </h3>
-              <button
-                type="button"
-                onClick={() => setPrimaryColorCount((c) => c + 1)}
-                className="flex items-center gap-1 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-100"
-              >
-                <Plus className="h-4 w-4" /> Add Primary Color
-              </button>
-            </div>
-            {Array.from({ length: primaryColorCount }, (_, i) => i + 1).map(
-              (i) => (
-                <div
-                  key={i}
-                  id={i === 1 ? "field-colors_primary_1_hex" : undefined}
-                  className="relative"
-                >
-                  {validationErrors["colors_primary_1_hex"] && i === 1 && (
-                    <p className="mb-1 text-sm text-red-600 flex items-center gap-1">
-                      <AlertCircle className="h-4 w-4" />{" "}
-                      {validationErrors["colors_primary_1_hex"]}
-                    </p>
-                  )}
-                  <div className="relative">
-                    <ColorInput
-                      label={`Primary Color ${i}`}
-                      prefix={`colors_primary_${i}`}
-                      values={formData}
-                      onChange={(key, val) => {
-                        handleInputChange(key, val);
-                        if (i === 1 && key === `colors_primary_1_hex`) {
-                          setValidationErrors((prev) => {
-                            const n = { ...prev };
-                            delete n["colors_primary_1_hex"];
-                            return n;
-                          });
-                        }
-                      }}
-                    />
-                    {i > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeColor("primary", i)}
-                        className="absolute top-3 right-3 rounded-md p-1 text-gray-400 hover:bg-red-50 hover:text-red-500"
-                        title="Remove"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ),
-            )}
-
-            <div className="flex items-center justify-between mt-6 mb-4">
-              <h3 className="text-md font-medium text-gray-900">
-                Secondary Colors <span className="text-red-500">*</span>
-              </h3>
-              <button
-                type="button"
-                onClick={() => setSecondaryColorCount((c) => c + 1)}
-                className="flex items-center gap-1 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-100"
-              >
-                <Plus className="h-4 w-4" /> Add Secondary Color
-              </button>
-            </div>
-            {Array.from({ length: secondaryColorCount }, (_, i) => i + 1).map(
-              (i) => (
-                <div
-                  key={i}
-                  id={i === 1 ? "field-colors_secondary_1_hex" : undefined}
-                  className="relative"
-                >
-                  {validationErrors["colors_secondary_1_hex"] && i === 1 && (
-                    <p className="mb-1 text-sm text-red-600 flex items-center gap-1">
-                      <AlertCircle className="h-4 w-4" />{" "}
-                      {validationErrors["colors_secondary_1_hex"]}
-                    </p>
-                  )}
-                  <div className="relative">
-                    <ColorInput
-                      label={`Secondary Color ${i}`}
-                      prefix={`colors_secondary_${i}`}
-                      values={formData}
-                      onChange={(key, val) => {
-                        handleInputChange(key, val);
-                        if (i === 1 && key === `colors_secondary_1_hex`) {
-                          setValidationErrors((prev) => {
-                            const n = { ...prev };
-                            delete n["colors_secondary_1_hex"];
-                            return n;
-                          });
-                        }
-                      }}
-                    />
-                    {i > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeColor("secondary", i)}
-                        className="absolute top-3 right-3 rounded-md p-1 text-gray-400 hover:bg-red-50 hover:text-red-500"
-                        title="Remove"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ),
-            )}
+            {COLOR_GROUPS.map(renderGroup)}
           </>
         );
       }
@@ -1204,62 +1380,144 @@ export default function App() {
         );
       }
       case "illustrations":
+      case "images": {
+        const section: DynamicTileSection = sectionId as DynamicTileSection;
+        const isIllustrations = section === "illustrations";
+        const count = isIllustrations ? illustrationTileCount : imageTileCount;
+        const setCount = isIllustrations
+          ? setIllustrationTileCount
+          : setImageTileCount;
+        const labels = isIllustrations
+          ? illustrationTileLabels
+          : imageTileLabels;
+        const setLabels = isIllustrations
+          ? setIllustrationTileLabels
+          : setImageTileLabels;
+        const downloadKey = `${section}_download_link`;
+        const downloadAllLabel = isIllustrations
+          ? "Download All Illustrations"
+          : "Download All Images";
+        const addLabel = isIllustrations ? "Add Illustration" : "Add Image";
+        const defaultLabel = DEFAULT_DYNAMIC_TILE_LABEL[section];
+
+        const removeTile = (idx: number) => {
+          setFormData((prev) => {
+            const next = { ...prev };
+            for (let i = idx; i < count; i++) {
+              const fromKey = `${section}_tile_download_link_${i + 1}`;
+              const toKey = `${section}_tile_download_link_${i}`;
+              if (next[fromKey] !== undefined) next[toKey] = next[fromKey];
+              else delete next[toKey];
+            }
+            delete next[`${section}_tile_download_link_${count}`];
+            return next;
+          });
+          setLabels((prev) => {
+            const next: Record<number, string> = {};
+            Object.keys(prev).forEach((k) => {
+              const n = Number(k);
+              if (n < idx) next[n] = prev[n];
+              else if (n > idx) next[n - 1] = prev[n];
+            });
+            return next;
+          });
+          setCount((c) => Math.max(1, c - 1));
+        };
+
         return (
           <>
             <FileUpload
-              label="Download All Illustrations"
-              fieldKey="illustrations_download_link"
+              label={downloadAllLabel}
+              fieldKey={downloadKey}
               onUploadComplete={handleInputChange}
-              currentUrl={formData.illustrations_download_link}
+              currentUrl={formData[downloadKey]}
               accept=".zip"
             />
-            <FileUpload
-              label="Hero Illustration"
-              fieldKey="illustrations_hero_download_link"
-              onUploadComplete={handleInputChange}
-              currentUrl={formData.illustrations_hero_download_link}
-            />
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mt-4">
-              {[1, 2, 3, 4, 5, 6, 7, 8].map((num) => (
-                <FileUpload
-                  key={num}
-                  label={`Tile ${num}`}
-                  fieldKey={`illustrations_tile_download_link_${num}`}
-                  onUploadComplete={handleInputChange}
-                  currentUrl={
-                    formData[`illustrations_tile_download_link_${num}`]
-                  }
-                />
-              ))}
+
+            <div className="flex items-center justify-end mt-6 mb-2">
+              <button
+                type="button"
+                onClick={() => setCount((c) => c + 1)}
+                className="flex items-center gap-1 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-100"
+              >
+                <Plus className="h-4 w-4" /> {addLabel}
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {Array.from({ length: count }, (_, idx) => idx + 1).map((num) => {
+                const tileLabel = labels[num] ?? "";
+                const fieldKey = `${section}_tile_download_link_${num}`;
+                return (
+                  <div
+                    key={num}
+                    className="relative rounded-lg border border-gray-200 bg-gray-50 p-3"
+                  >
+                    <div className="relative mb-2">
+                      <input
+                        type="text"
+                        value={tileLabel}
+                        onChange={(e) =>
+                          setLabels((prev) => ({
+                            ...prev,
+                            [num]: e.target.value,
+                          }))
+                        }
+                        placeholder={`${defaultLabel} ${num}`}
+                        className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 pr-9"
+                      />
+                        {count > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeTile(num)}
+                          className="absolute top-1/2 -translate-y-1/2 right-2 rounded-md p-1 text-gray-400 hover:bg-red-50 hover:text-red-500 cursor-pointer"
+                          title="Remove"
+                        >
+                          <Trash2 className="size-4" />
+                        </button>
+                      )}
+                    </div>
+                    <FileUpload
+                      label=""
+                      fieldKey={fieldKey}
+                      onUploadComplete={handleInputChange}
+                      currentUrl={formData[fieldKey]}
+                    />
+                  </div>
+                );
+              })}
             </div>
           </>
         );
-      case "images":
+      }
+      case "collaterals": {
+        const updateItem = (idx: number, patch: { label?: string }) => {
+          setCollateralItems((prev) =>
+            prev.map((item, i) => (i === idx ? { ...item, ...patch } : item)),
+          );
+        };
+        const removeItem = (idx: number) => {
+          const removed = collateralItems[idx];
+          if (!removed) return;
+          setCollateralItems((prev) => prev.filter((_, i) => i !== idx));
+          setFormData((prev) => {
+            const next = { ...prev };
+            delete next[`collaterals_item_${removed.id}_download_link`];
+            return next;
+          });
+        };
+        const addItem = () => {
+          setCollateralItems((prev) => [
+            ...prev,
+            {
+              id: `custom_${Date.now().toString(36)}_${prev.length + 1}`,
+              label: `Collateral ${prev.length + 1}`,
+            },
+          ]);
+        };
+
         return (
           <>
-            <FileUpload
-              label="Download All Images"
-              fieldKey="images_download_link"
-              onUploadComplete={handleInputChange}
-              currentUrl={formData.images_download_link}
-              accept=".zip"
-            />
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mt-4">
-              {[1, 2, 3, 4, 5, 6, 7, 8].map((num) => (
-                <FileUpload
-                  key={num}
-                  label={`Tile ${num}`}
-                  fieldKey={`images_tile_download_link_${num}`}
-                  onUploadComplete={handleInputChange}
-                  currentUrl={formData[`images_tile_download_link_${num}`]}
-                />
-              ))}
-            </div>
-          </>
-        );
-      case "collaterals":
-        return (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <FileUpload
               label="Download All Collaterals (Zip)"
               fieldKey="collaterals_download_all_collaterals"
@@ -1267,32 +1525,74 @@ export default function App() {
               currentUrl={formData.collaterals_download_all_collaterals}
               accept=".zip,.rar,.7z"
             />
-            <FileUpload
-              label="Business Card"
-              fieldKey="collaterals_businesscard_download_link"
-              onUploadComplete={handleInputChange}
-              currentUrl={formData.collaterals_businesscard_download_link}
-            />
-            <FileUpload
-              label="Letterhead"
-              fieldKey="collaterals_letterhead_download_link"
-              onUploadComplete={handleInputChange}
-              currentUrl={formData.collaterals_letterhead_download_link}
-            />
-            <FileUpload
-              label="Email Signature"
-              fieldKey="collaterals_emailsignature_download_link"
-              onUploadComplete={handleInputChange}
-              currentUrl={formData.collaterals_emailsignature_download_link}
-            />
-            <FileUpload
-              label="Proposal"
-              fieldKey="collaterals_proposal_link"
-              onUploadComplete={handleInputChange}
-              currentUrl={formData.collaterals_proposal_link}
-            />
-          </div>
+
+            <div className="flex items-center justify-end mt-6 mb-2">
+              <button
+                type="button"
+                onClick={addItem}
+                className="flex items-center gap-1 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-100"
+              >
+                <Plus className="h-4 w-4" /> Add Collateral
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {collateralItems.map((item, idx) => {
+                const isLetterhead = item.id === "letterhead";
+                const fieldKey = `collaterals_item_${item.id}_download_link`;
+                return (
+                  <div
+                    key={item.id}
+                    className="relative rounded-lg border border-gray-200 bg-gray-50 p-4"
+                  >
+                    <div className="relative mb-2">
+                      <input
+                        type="text"
+                        value={item.label}
+                        onChange={(e) =>
+                          updateItem(idx, { label: e.target.value })
+                        }
+                        placeholder="Collateral name"
+                        className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 pr-9"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeItem(idx)}
+                        className="absolute top-1/2 -translate-y-1/2 right-2 rounded-md p-1 text-gray-400 hover:bg-red-50 hover:text-red-500 cursor-pointer"
+                        title="Remove"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <FileUpload
+                      label=""
+                      fieldKey={fieldKey}
+                      onUploadComplete={handleInputChange}
+                      currentUrl={formData[fieldKey]}
+                      accept={isLetterhead ? ".zip" : undefined}
+                    />
+                    {isLetterhead && (
+                      <p className="mt-1 text-xs text-gray-500">
+                        Upload a ZIP containing print PDF, open-file format, and
+                        PNG.
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mt-6">
+              <FileUpload
+                label="Proposal Template"
+                fieldKey="collaterals_proposal_link"
+                onUploadComplete={handleInputChange}
+                currentUrl={formData.collaterals_proposal_link}
+              />
+            </div>
+          </>
         );
+      }
       case "patterns":
         return (
           <>
