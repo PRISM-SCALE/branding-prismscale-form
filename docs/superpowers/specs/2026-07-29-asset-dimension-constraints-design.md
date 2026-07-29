@@ -21,9 +21,15 @@ Two fields carry real consequences, because the renderer sizes them rigidly:
 
 ## Decisions
 
-1. **Warn, but never block.** Off-spec uploads are accepted. A client with a
-   slightly-wrong export must always be able to finish the form; the warning
-   exists so the problem is visible during UAT, not so the form can refuse work.
+1. **Warn, but never block — for the dimension rules.** Off-spec uploads are
+   accepted. A client with a slightly-wrong export must always be able to finish
+   the form; the warning exists so the problem is visible during UAT, not so the
+   form can refuse work.
+   **Superseded for file size (2026-07-29):** the size rule is *enforced*. An
+   over-limit file is rejected before any network call and never uploaded. See
+   the File size section — the reasoning that makes warn-only right for
+   dimensions does not carry over, because an oversized upload costs a wasted
+   round trip and degrades the published page in a way no reviewer can fix later.
 2. **Scope is the two hero fields only.** Logo variants, favicons, illustration
    and image tiles, and collaterals are unchanged. Tiles sit in flexible grids
    where exact dimensions barely matter.
@@ -127,9 +133,54 @@ and `spec={HERO_SPEC}` on the Brand Hero Image field (`:1000`).
 - Warn when the URL extension is `.jpg` / `.jpeg`, since JPEG cannot carry
   transparency and will show a box against the dark hero
 
-SVG uploads report meaningful `naturalWidth` / `naturalHeight` only when the
-file declares intrinsic dimensions. When both read as 0, treat the asset as
-`ok`: SVG is vector and resolution-independent, so dimension rules do not apply.
+A `.svg` URL is treated as vector regardless of reported size: Figma and
+Illustrator exports declare `width`/`height` at artboard size, a viewBox-only
+SVG may report the 300×150 browser default, and a failed measurement reports
+0×0 — none of these mean "too small." Resolution rules (`minWidth`,
+`minHeight`) are skipped for vector assets; aspect-ratio rules (`aspect`,
+`maxAspect`) still apply whenever the SVG reports real, non-zero dimensions,
+since aspect is intrinsic to the artwork and a genuinely 0×0 image can't have
+a ratio computed at all.
+
+### File size — enforced, not advisory
+
+Added 2026-07-29 after the dimension rules shipped.
+
+- `HERO_SPEC`: reject above **2 MB**. Generous for a well-exported 1920 × 1080
+  JPEG, but catches an unoptimised camera dump that would make the published
+  page slow on mobile.
+- `LOGO_SPEC`: reject above **500 KB**. A logo at 800 × 320 is normally well
+  under 100 KB as PNG or SVG, so this size usually means an embedded raster.
+
+**An over-limit file is not uploaded.** `handleFileChange` evaluates the rule
+and returns before requesting a presigned URL, so no network call is made at
+all — verified in Chrome: picking an 8 MB file while online produced zero
+requests, while a valid file still issued `POST /api/upload-url`. The file input
+is also reset on rejection, so re-picking a same-named file still fires
+`onChange` once the user re-exports it smaller.
+
+This is the one place the feature blocks, and it is deliberate: uploading a file
+we would immediately tell the user to replace wastes their time on a large
+upload and leaves a junk object in S3.
+
+Size is read from `file.size` when the file is picked, **not** from the URL.
+Bytes are not obtainable from `new Image()`, and reading `Content-Length` would
+need an HTTP `HEAD`, which — unlike `<img>` — is subject to S3 CORS. Measuring
+the `File` needs no network and no bucket policy change.
+
+Because rejection means nothing is uploaded, there is no URL to re-measure on
+reload — but there is also nothing to warn about, since the over-limit file
+never entered the form. The per-session/persistent split that would otherwise
+be awkward therefore does not arise.
+
+`evaluateSize(bytes, spec)` is a separate pure export from `evaluateSpec`,
+because the two are evaluated at different moments from different inputs.
+`FileUpload` concatenates size messages ahead of dimension messages and renders
+the advisory whenever the combined list is non-empty.
+
+Sizes are formatted with `Math.ceil`, never `Math.round`. The message only shows
+when the file exceeds the limit, so rounding down produces the self-contradictory
+"This file is 2.0 MB — recommended under 2 MB" for anything in the 2–2.05 MB band.
 
 ### Message wording
 
@@ -152,7 +203,7 @@ consequence is the part that makes the warning actionable:
 | URL cleared by the user | State resets, warning disappears |
 | URL replaced mid-measurement | Prior measurement discarded |
 | `spec` prop absent | Hook inert, component behaves as today |
-| Non-image upload (PDF) | No spec passed on those fields, so unreachable |
+| Non-image upload (PDF) | Unreachable on the two specced fields: they are constrained to `accept="image/*"`, so the file picker filters PDFs out |
 
 ## Verification
 

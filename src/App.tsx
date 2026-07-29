@@ -12,6 +12,7 @@ import {
   GripVertical,
 } from "lucide-react";
 import { motion } from "motion/react";
+import { HERO_SPEC, LOGO_SPEC } from "./lib/imageSpec";
 
 type PlaceholderSection = Record<string, string>;
 
@@ -988,6 +989,8 @@ export default function App() {
                 fieldKey="brand_logo_url"
                 onUploadComplete={handleInputChange}
                 currentUrl={formData.brand_logo_url}
+                accept="image/*"
+                spec={LOGO_SPEC}
               />
               {validationErrors.brand_logo_url && (
                 <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
@@ -1002,6 +1005,8 @@ export default function App() {
                 fieldKey="brand_hero_image_url"
                 onUploadComplete={handleInputChange}
                 currentUrl={formData.brand_hero_image_url}
+                accept="image/*"
+                spec={HERO_SPEC}
               />
               {validationErrors.brand_hero_image_url && (
                 <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
@@ -1662,7 +1667,7 @@ export default function App() {
     <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8 font-sans">
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-gray-900 tracking-tight mb-4">
+          <h1 className="text-4xl font-bold text-gray-900 tracking-tight mb-2.5">
             Branding Page Generator
           </h1>
           <p className="text-lg text-gray-600">
