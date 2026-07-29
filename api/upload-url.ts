@@ -26,6 +26,22 @@ const createS3Client = () => {
 
 export const config = { runtime: 'nodejs' };
 
+/**
+ * Build an RFC 6266 `attachment` disposition for a user-supplied filename.
+ * Quotes, backslashes and anything outside printable ASCII are replaced in the
+ * plain `filename`, with the exact name carried by `filename*` for clients that
+ * support it. Header values cannot contain CR/LF, so those are stripped too.
+ */
+const buildAttachmentDisposition = (filename: string): string => {
+  const asciiFallback =
+    filename
+      .replace(/[^\x20-\x7E]/g, '_')
+      .replace(/["\\]/g, '_')
+      .trim() || 'download';
+
+  return `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
+};
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
@@ -49,17 +65,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const key = `branding-prismscale-assets/${Date.now()}_${filename}`;
+
+  // Brand pages are served from a different S3 host than the assets, so the
+  // anchor `download` attribute is ignored as cross-origin and the browser
+  // renders PDFs/docs inline instead of saving them. Content-Disposition is
+  // origin-independent, so store it on the object at upload time. It also gives
+  // the download the original filename instead of the timestamped key.
+  // Only affects navigations - `<img src>` previews ignore it and still render.
+  const contentDisposition = buildAttachmentDisposition(filename);
+
   const command = new PutObjectCommand({
     Bucket: BUCKET_NAME,
     Key: key,
     ContentType: contentType,
+    ContentDisposition: contentDisposition,
   });
 
   try {
     const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
     const fileUrl = `https://${BUCKET_NAME}.s3.${REGION}.amazonaws.com/${key}`;
 
-    return res.status(200).json({ uploadUrl, fileUrl });
+    // Returned so the client can echo it on the PUT: it is a signed header, and
+    // a missing or differing value fails the signature check.
+    return res.status(200).json({ uploadUrl, fileUrl, contentDisposition });
   } catch (error) {
     console.error('Error generating upload URL:', error);
     return res.status(500).json({ error: 'Failed to generate upload URL' });

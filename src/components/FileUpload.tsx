@@ -59,14 +59,18 @@ export const FileUpload: React.FC<FileUploadProps> = ({ label, fieldKey, onUploa
         throw new Error(errorData.error || `Server error: ${presignRes.status}`);
       }
 
-      const { uploadUrl, fileUrl } = await presignRes.json();
+      const { uploadUrl, fileUrl, contentDisposition } = await presignRes.json();
       if (!uploadUrl) throw new Error('No uploadUrl returned from server');
 
-      // Upload the file directly to S3 using the presigned URL
+      // Upload the file directly to S3 using the presigned URL.
+      // Content-Disposition is part of the signed request, so it has to be sent
+      // back byte-for-byte as the server built it or S3 rejects the signature.
+      // Guarded so an older deploy that omits it keeps working.
       const uploadRes = await fetch(uploadUrl, {
         method: 'PUT',
         headers: {
           'Content-Type': file.type || 'application/octet-stream',
+          ...(contentDisposition ? { 'Content-Disposition': contentDisposition } : {}),
         },
         body: file,
       });
